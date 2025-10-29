@@ -1,0 +1,19 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Social Network API Metrics",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "API Response Times",
+        "targets": [
+          {
+            "expr": "rate(http_request_duration_seconds_sum[1m]) / rate(http_request_duration_seconds_count[1m])",
+            "legendFormat": "{{method}}"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}

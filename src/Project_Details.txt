@@ -1,0 +1,40 @@
+architecture = {
+    "🗄️ Data Layer": [
+        "user.py - User and connection models",
+        "sharding.py - Distributed graph sharding",
+        "graph_database.py - Core graph database"
+    ],
+    "🧠 Algorithm Layer": [
+        "bidirectional_bfs.py - Optimized pathfinding",
+        "lru_cache.py - High-performance caching"
+    ],
+    "🚀 Service Layer": [
+        "pathfinding_service.py - Main business logic",
+        "api_server.py - REST API endpoints"
+    ],
+    "🐳 Deployment": [
+        "Dockerfile - Container configuration",
+        "docker-compose.yml - Multi-service orchestration",
+        "requirements.txt - Python dependencies"
+    ],
+    "🎯 Application": [
+        "main.py - Demo and entry point",
+        "test_core.py - Unit tests",
+        "README.md - Comprehensive documentation"
+    ]
+}
+
+features = [
+    "✅ Distributed graph database with edge-cut sharding",
+    "✅ Bidirectional BFS algorithm (O(b^(d/2)) complexity)",
+    "✅ High-performance LRU cache with TTL support", 
+    "✅ Thread-safe concurrent operations",
+    "✅ REST API with comprehensive endpoints",
+    "✅ Real-time graph updates with cache invalidation",
+    "✅ Docker containerization and orchestration",
+    "✅ Performance monitoring and metrics",
+    "✅ Batch query processing capabilities",
+    "✅ Connection suggestion algorithms",
+    "✅ Production-ready error handling",
+    "✅ Comprehensive documentation and tests"
+]
