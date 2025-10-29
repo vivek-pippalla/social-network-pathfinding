@@ -109,15 +109,15 @@ GET /api/v1/stats
 GET /health
 
 🏗️ System Design Highlights
-Database Sharding
-Edge-Cut Sharding → simplicity, scalability, locality
-Consistent hashing → smooth scaling
+**Database Sharding**
+**Edge-Cut Sharding → simplicity, scalability, locality**
+**Consistent hashing → smooth scaling**
 
 Algorithm
-Bidirectional BFS → exponential performance gain
-Lower memory usage and better parallelism
+**Bidirectional BFS → exponential performance gain**
+**Lower memory usage and better parallelism**
 
 Caching
-Path-specific LRU cache
-Fast invalidation on updates
-Distributed and TTL-based
+**Path-specific LRU cache**
+**Fast invalidation on updates**
+**Distributed and TTL-based**
