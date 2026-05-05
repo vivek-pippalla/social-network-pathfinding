@@ -1,0 +1,210 @@
+
+# 📘 File-by-File Memory Statements
+
+---
+
+# 1️⃣ `bidirectional_bfs.py`
+
+**Sentence**
+
+> This file exists because the system must compute the shortest path between two users efficiently, it talks to the `GraphDatabase` to fetch neighbors, and improves pathfinding performance by reducing the search space using bidirectional BFS.
+
+**What it controls**
+
+* Core algorithm
+* Shortest path logic
+* Search efficiency
+
+---
+
+# 2️⃣ `graph_database.py`
+
+**Sentence**
+
+> This file exists because the system needs a structured way to store and retrieve the social graph, it talks to the `User` and `Connection` models and the `Sharding` layer, and improves graph access speed through adjacency list storage and centralized graph operations.
+
+**What it controls**
+
+* User storage
+* Connections
+* Neighbor queries
+
+---
+
+# 3️⃣ `sharding.py`
+
+**Sentence**
+
+> This file exists because the graph can grow too large for a single machine, it talks to the `GraphDatabase` to distribute users across shards, and improves scalability by partitioning the graph using hash-based sharding.
+
+**What it controls**
+
+* Horizontal scalability
+* Cross-shard edges
+* Data distribution
+
+---
+
+# 4️⃣ `lru_cache.py`
+
+**Sentence**
+
+> This file exists because repeated path queries are expensive to recompute, it talks to the `PathfindingService` to store and retrieve computed paths, and improves system performance by caching results using an LRU eviction policy with TTL expiration.
+
+**What it controls**
+
+* Cache hits
+* Cache eviction
+* Query acceleration
+
+---
+
+# 5️⃣ `pathfinding_service.py`
+
+**Sentence**
+
+> This file exists because the system needs a central orchestration layer to manage requests, it talks to the `Cache`, `BidirectionalBFS`, and `GraphDatabase`, and improves system organization by coordinating cache checks, path computation, and response formatting.
+
+**What it controls**
+
+* Request lifecycle
+* Cache vs algorithm decision
+* Metrics tracking
+
+---
+
+# 6️⃣ `api_server.py`
+
+**Sentence**
+
+> This file exists because external clients need a way to access the pathfinding system, it talks to the `PathfindingService`, and improves usability by exposing REST APIs for shortest-path queries and graph operations.
+
+**What it controls**
+
+* HTTP endpoints
+* Request validation
+* JSON responses
+
+---
+
+# 7️⃣ `main.py`
+
+**Sentence**
+
+> This file exists because the application needs a clear startup entry point, it talks to the `API server`, `PathfindingService`, and demo components, and improves deployment and testing by initializing and running the system.
+
+**What it controls**
+
+* Application startup
+* Demo mode
+* Dependency wiring
+
+---
+
+# 8️⃣ `user.py`
+
+**Sentence**
+
+> This file exists because users are the fundamental nodes in the social graph, it talks to the `GraphDatabase` and `Connection` models, and improves data modeling by defining user identity and connection management.
+
+**What it controls**
+
+* User identity
+* User connections
+* Graph nodes
+
+---
+
+# 9️⃣ `connection.py`
+
+**Sentence**
+
+> This file exists because relationships between users must be represented explicitly, it talks to the `User` model and `GraphDatabase`, and improves graph semantics by defining connection types such as friend, follow, or block.
+
+**What it controls**
+
+* Graph edges
+* Relationship semantics
+* Future graph features
+
+---
+
+# 🔟 `test_core.py`
+
+**Sentence**
+
+> This file exists because the core graph logic must be validated, it talks to the graph and pathfinding logic, and improves reliability by testing user creation, connections, and path semantics.
+
+**What it controls**
+
+* Core correctness tests
+* Graph invariants
+
+---
+
+# 1️⃣1️⃣ `test_api.py`
+
+**Sentence**
+
+> This file exists because the API must be verified from an external perspective, it talks to the running API server through HTTP requests, and improves system reliability by validating end-to-end request and response behavior.
+
+**What it controls**
+
+* API integration testing
+
+---
+
+# 1️⃣2️⃣ `Dockerfile`
+
+**Sentence**
+
+> This file exists because the application needs a portable runtime environment, it talks to the application code and dependency configuration, and improves deployment by packaging the system into a reproducible container image.
+
+**What it controls**
+
+* Container build process
+
+---
+
+# 1️⃣3️⃣ `docker-compose.yml`
+
+**Sentence**
+
+> This file exists because multiple services must run together in development, it talks to the API container, Redis, MongoDB, and monitoring services, and improves system orchestration by defining how containers start and communicate.
+
+**What it controls**
+
+* Multi-service deployment
+
+---
+
+# 1️⃣4️⃣ `prometheus.yml`
+
+**Sentence**
+
+> This file exists because system performance metrics must be collected, it talks to the API server and exporters to scrape metrics, and improves observability by enabling performance monitoring and alerting.
+
+**What it controls**
+
+* Metrics scraping
+* Monitoring configuration
+
+---
+
+# 1️⃣5️⃣ `sample-dashboard.json`
+
+**Sentence**
+
+> This file exists because raw metrics need to be visualized, it talks to Prometheus as a data source, and improves operational visibility by displaying system performance metrics in Grafana dashboards.
+
+**What it controls**
+
+* Visualization
+* Performance monitoring
+
+---
+
+# 🧠 Master Summary (Whole System in One Sentence)
+
+> The API receives a request, the PathfindingService checks the cache, if needed runs Bidirectional BFS using graph data from the database, stores results in cache, and exposes metrics that Prometheus collects and Grafana visualizes.
+
