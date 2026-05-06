@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.db.neo4j_db import test_connection
 
 # Will import routes later
 # from app.api import routes_users, routes_graph
@@ -25,6 +26,11 @@ async def health_check():
     Check if the API is running.
     """
     return {"status": "ok", "message": "API is running"}
+
+@app.get("/db-check")
+def db_check():
+    return {"neo4j": test_connection()}
+
 
 # TODO: Include routers
 # app.include_router(routes_users.router)
