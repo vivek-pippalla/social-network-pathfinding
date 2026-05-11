@@ -2,14 +2,14 @@
 
 ## 1. High Level Architecture (HLD)
 
-The system is designed as a modular, containerized microservice that handles social graph operations.
+The system is a containerised microservice for social graph operations.
 
 ```mermaid
 graph TD
-    Client[Client / Postman / UI] -->|HTTP/REST| API[FastAPI Web Server]
-    API -->|Read/Write Cache| Redis[(Redis Cache)]
+    Client[Client / Postman / Swagger UI] -->|HTTP/REST| API[FastAPI Web Server]
+    API -->|Cache Check / Store| Redis[(Redis Cache)]
     API -->|Cypher Queries| Neo4j[(Neo4j Graph DB)]
-    
+
     subgraph Docker Network
     API
     Redis
@@ -18,88 +18,155 @@ graph TD
 ```
 
 **Components:**
-1.  **FastAPI (Application Layer):** Handles HTTP requests, input validation, and business logic.
-2.  **Neo4j (Data Layer):** The primary source of truth. Stores Users as `Nodes` and Friendships as `Edges` (Relationships). Optimized for deep graph traversal.
-3.  **Redis (Cache Layer):** Stores frequently requested paths to ensure sub-100ms response times and reduce load on Neo4j.
+1. **FastAPI** — Handles HTTP requests, input validation via Pydantic, and business logic routing.
+2. **Neo4j** — The primary source of truth. Stores `User` nodes and `CONNECTED` relationships. Uses native `shortestPath()` for graph traversal.
+3. **Redis** — Caches shortest path results with a 1-hour TTL to ensure sub-10ms response times on repeated queries.
 
 ---
 
 ## 2. Low Level Architecture (LLD)
 
-Inside the FastAPI Application, we follow a strict **3-Tier Architecture**:
+A strict **4-Tier Architecture** inside the FastAPI application:
 
-1.  **Router/API Tier (`app/api/`):** 
-    *   Receives the request.
-    *   Validates the payload using Pydantic schemas.
-    *   Passes data to the Service layer.
-2.  **Service/Business Logic Tier (`app/services/`):** 
-    *   Contains the core algorithms.
-    *   Checks the Redis cache first.
-    *   If cache miss, queries the database.
-    *   Formats the response and updates the cache.
-3.  **Database/Repository Tier (`app/db/`):** 
-    *   Manages connection pools.
-    *   Executes raw Cypher queries against Neo4j.
-    *   Executes set/get commands against Redis.
+```
+Router / API Layer   →   Service Layer   →   Repository Layer   →   Database Layer
+  (app/api/)              (app/services/)     (app/repositories/)     (app/db/)
+```
+
+| Layer | Folder | Responsibility |
+|---|---|---|
+| **API / Router** | `app/api/` | Receive request, validate payload, call service |
+| **Service / Logic** | `app/services/` | Orchestrate cache + DB, format response |
+| **Repository / DB** | `app/repositories/` | Execute raw Cypher/Redis queries |
+| **Connection Drivers** | `app/db/` | Manage Neo4j driver + Redis client singletons |
 
 ---
 
-## 3. System Workflow (Pathfinding Example)
+## 3. Request Workflow: Pathfinding
 
-When a user requests the shortest path between `User A` and `User B`:
+```
+GET /api/v1/path/{start}/{end}
+         │
+         ▼
+  routes_graph.py (Router)
+         │
+         ▼
+  pathfinder.py (Service)
+         │
+         ├── redis_cache.get_cached_path()
+         │         │
+         │    ┌────┴────┐
+         │    │ HIT     │ MISS
+         │    ▼         ▼
+         │  Return    graph_repo.find_shortest_path()
+         │  cached        │
+         │  result    Neo4j shortestPath() query
+         │                │
+         │            redis_cache.set_cached_path()
+         │                │
+         └────────────────┘
+                  │
+                  ▼
+           PathResponse JSON
+```
 
-1.  **Request:** `GET /api/v1/path/A/B` hits the FastAPI router.
-2.  **Validation:** FastAPI ensures `A` and `B` are valid UUIDs/Strings.
-3.  **Cache Check:** Service layer asks Redis: `GET path:A:B`.
-    *   *If Cache Hit:* Return path immediately (Response time: ~5ms).
-    *   *If Cache Miss:* Proceed to step 4.
-4.  **Database Query:** Service layer sends a Cypher query to Neo4j to find the shortest path using Neo4j's native bidirectional BFS.
-5.  **Cache Update:** Store the result in Redis with a TTL (e.g., 1 hour): `SETEX path:A:B 3600 <result>`.
-6.  **Response:** Return the path to the user (Response time: ~50ms).
+**Result:**
+- **Cache Hit** → ~5ms response time
+- **Cache Miss** → ~50–200ms (Neo4j query) → result cached for 1 hour
 
 ---
 
-## 4. Final Folder Structure & File Contents
+## 4. Friend Suggestion Workflow
 
-This is the exact structure we are building. Every file has a specific, single responsibility.
+```
+GET /api/v1/suggestions/{user_id}
+         │
+         ▼
+   graph_repo.get_friend_suggestions()
+         │
+         ▼
+  Cypher: Find friends-of-friends (2-hop)
+  not already connected to user,
+  ranked by mutual friend count DESC
+         │
+         ▼
+   SuggestionResponse JSON (top 10)
+```
+
+---
+
+## 5. Final Folder Structure
 
 ```text
 social-network-pathfinding/
+│
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                  # FastAPI application instance, CORS setup, router inclusion
+│   ├── main.py                     # FastAPI app, lifespan, CORS, router registration
+│   │
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── routes_users.py      # Endpoints: POST /users, GET /users/{id}
-│   │   ├── routes_graph.py      # Endpoints: POST /connections, GET /path, GET /suggestions
+│   │   ├── routes_users.py         # POST /users, GET /users/{id}, GET /users/search
+│   │   └── routes_graph.py         # POST /connections, GET /path, GET /suggestions
+│   │
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── config.py            # Environment variables (DB_URL, Redis_URL) using pydantic-settings
-│   │   ├── exceptions.py        # Custom error handlers (e.g., UserNotFoundException)
+│   │   ├── config.py               # Environment variables via pydantic-settings
+│   │   ├── exceptions.py           # Custom HTTP exceptions (404, 409)
+│   │   └── logging_config.py       # Structured JSON logging setup
+│   │
 │   ├── db/
 │   │   ├── __init__.py
-│   │   ├── neo4j_db.py          # Neo4j connection pooling and raw Cypher execution
-│   │   ├── redis_cache.py       # Redis connection and caching helper functions
+│   │   ├── neo4j_db.py             # Singleton Neo4j driver + FastAPI dependency
+│   │   └── redis_cache.py          # Redis get/set helpers with TTL
+│   │
 │   ├── models/
 │   │   ├── __init__.py
-│   │   ├── schemas.py           # Pydantic models (UserCreate, ConnectionCreate, PathResponse)
-│   ├── services/
+│   │   └── schemas.py              # Pydantic request/response models
+│   │
+│   ├── repositories/
 │   │   ├── __init__.py
-│   │   ├── user_service.py      # Business logic for creating users and connections
-│   │   ├── pathfinder.py        # Logic coordinating Redis cache and Neo4j pathfinding
-│
-├── tests/                       # Pytest directory
-│   ├── __init__.py
-│   ├── conftest.py              # Test fixtures (mock DBs)
-│   ├── test_users.py
-│   ├── test_graph.py
+│   │   ├── user_repo.py            # Neo4j: create user, get by id, search
+│   │   └── graph_repo.py           # Neo4j: create connection, shortestPath, suggestions
+│   │
+│   └── services/
+│       ├── __init__.py
+│       ├── user_service.py         # User business logic
+│       └── pathfinder.py           # Cache → Neo4j → Cache-Store orchestration
 │
 ├── scripts/
-│   ├── seed_data.py             # Script to generate 1000 users and connections for testing
+│   └── seed_data.py                # Downloads Stanford SNAP Facebook dataset & ingests into Neo4j
 │
-├── .env.example                 # Template for environment variables
-├── docker-compose.yml           # Spins up FastAPI, Neo4j, and Redis
-├── Dockerfile                   # Instructions to build the FastAPI image
-├── requirements.txt             # Python dependencies (fastapi, neo4j, redis, uvicorn)
-└── README.md                    # Project documentation
+├── documentation/
+│   └── architecture.md             # This document
+│
+├── docker-compose.yml              # FastAPI + Neo4j + Redis containers
+├── Dockerfile                      # Multi-stage FastAPI image
+├── requirements.txt                # Python dependencies
+├── .env                            # Environment variables (not committed to git)
+└── README.md                       # Project documentation
 ```
+
+---
+
+## 6. Data Strategy
+
+**Dataset:** Stanford SNAP — Facebook Social Circles (`ego-Facebook`)
+- **Nodes:** 4,039 users
+- **Edges:** 88,234 connections
+- **Source:** https://snap.stanford.edu/data/ego-Facebook.html
+
+The `seed_data.py` script downloads this dataset (~1 MB compressed) and batch-imports it into Neo4j in transactions of 500 records, demonstrating awareness of database write performance.
+
+---
+
+## 7. API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | API health check |
+| `POST` | `/api/v1/users` | Create a new user |
+| `GET` | `/api/v1/users/{id}` | Get user by ID |
+| `GET` | `/api/v1/users/search?q=` | Search users by name |
+| `POST` | `/api/v1/connections` | Create a connection between two users |
+| `GET` | `/api/v1/path/{start}/{end}` | Find shortest path between two users |
+| `GET` | `/api/v1/suggestions/{user_id}` | Get friend suggestions (friends-of-friends) |
