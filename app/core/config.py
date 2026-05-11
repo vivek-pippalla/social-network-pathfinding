@@ -1,15 +1,20 @@
-# app/core/config.py
-import os
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
-load_dotenv()
 
-class Settings:
-    NEO4J_URI = os.getenv("NEO4J_URI")
-    NEO4J_USER = os.getenv("NEO4J_USER")
-    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+class Settings(BaseSettings):
+    # Neo4j
+    NEO4J_URI: str = "bolt://localhost:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "password123"
 
-    REDIS_HOST = os.getenv("REDIS_HOST")
-    REDIS_PORT = os.getenv("REDIS_PORT")
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Cache
+    CACHE_TTL_SECONDS: int = 3600
+
+    class Config:
+        env_file = ".env"
+
 
 settings = Settings()

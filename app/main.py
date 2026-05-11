@@ -1,17 +1,36 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.db.neo4j_db import test_connection
 
-# Will import routes later
-# from app.api import routes_users, routes_graph
+from app.core.logging_config import setup_logging
+from app.db.neo4j_db import get_driver, close_driver
+from app.api import routes_users, routes_graph
+
+# Initialise structured logging before anything else
+setup_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage startup and shutdown events."""
+    # Startup: warm up the Neo4j driver (verifies connectivity)
+    get_driver()
+    yield
+    # Shutdown: close the driver gracefully
+    close_driver()
+
 
 app = FastAPI(
     title="Social Network Pathfinding API",
-    description="A highly scalable pathfinding engine using Neo4j and Redis.",
-    version="1.0.0"
+    description=(
+        "A production-grade backend that finds shortest connection paths "
+        "between users in a social graph, backed by Neo4j and Redis."
+    ),
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
-# Configure CORS
+# CORS — allow all origins in development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,23 +39,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/health", tags=["Health"])
+# Register routers
+app.include_router(routes_users.router)
+app.include_router(routes_graph.router)
+
+
+@app.get("/health", tags=["Health"], summary="API health check")
 async def health_check():
-    """
-    Check if the API is running.
-    """
-    return {"status": "ok", "message": "API is running"}
-
-@app.get("/db-check")
-def db_check():
-    return {"neo4j": test_connection()}
-
-
-# TODO: Include routers
-# app.include_router(routes_users.router)
-# app.include_router(routes_graph.router)
-
-if __name__ == "__main__":
-    import uvicorn
-    # This allows running `python app/main.py` directly for development
-    uvicorn.run("app.main:app", host="0.0.0.0", port=5000, reload=True)
+    return {"status": "ok", "message": "Social Network Pathfinding API is running."}
