@@ -1,6 +1,12 @@
 # Interview Preparation Checklist
 ## Social Network Pathfinding Engine — Complete Study Guide
 
+<<<<<<< HEAD
+=======
+> **How to use this checklist:** Study each section. Mark topics `[x]` when you can explain them OUT LOUD without looking at notes. If you can't explain it to a 10-year-old, you don't know it well enough yet.
+
+---
+>>>>>>> e91ed46c3ec040a8d2be2e99e74832346f8a6cc4
 
 ## SECTION 1: Core Computer Science Concepts
 
