@@ -204,7 +204,141 @@
 
 ---
 
-## SECTION 6: Expected Interview Questions with Model Answers
+## SECTION 6: Performance & Optimization Section
+
+- [ ] Why is Redis faster than Neo4j?
+- [ ] What is network latency?
+- [ ] What is serialization overhead?
+- [ ] Why are graph traversals expensive?
+- [ ] Why is bidirectional BFS faster than normal BFS?
+- [ ] What is connection pooling?
+- [ ] Why avoid creating DB connections per request?
+- [ ] Why cache shortest paths?
+- [ ] What are cache stampedes?
+- [ ] What is warm cache vs cold cache?
+- [ ] Why are indexes important in databases?
+- [ ] Did we index user IDs in Neo4j?
+- [ ] What metrics would you monitor in production?
+- [ ] What is memory vs CPU tradeoff?
+
+Key answer:
+
+“The biggest optimization in our system is avoiding repeated graph traversal. Pathfinding is computationally expensive, so caching previously computed paths in Redis drastically reduces latency and database load.”
+
+---
+
+## SECTION 7: Production Engineering Concepts
+
+- [ ] What is environment configuration?
+- [ ] Why use .env files?
+- [ ] Why never hardcode secrets?
+- [ ] What is structured logging?
+- [ ] What is observability?
+- [ ] What are logs vs metrics vs traces?
+- [ ] What is health monitoring?
+- [ ] What happens if Neo4j crashes?
+- [ ] What happens if Redis crashes?
+- [ ] What is retry logic?
+- [ ] What is graceful degradation?
+- [ ] What is idempotency?
+- [ ] What is rate limiting?
+- [ ] What is API throttling?
+- [ ] What is request timeout?
+- [ ] What is circuit breaker pattern?
+Key answer:
+
+“The system is designed with graceful degradation. If Redis fails, requests still succeed through Neo4j directly. This improves reliability and fault tolerance.”
+
+---
+
+## SECTION 8: Security Concepts
+
+- [ ] What is CORS?
+- [ ] Why is exposing databases publicly dangerous?
+- [ ] What is API authentication?
+- [ ] Difference between authentication and authorization
+- [ ] What is JWT?
+- [ ] What is HTTPS?
+- [ ] Why should secrets never be committed to GitHub?
+- [ ] What is environment variable injection?
+- [ ] What is input validation?
+- [ ] How does Pydantic improve security?
+- [ ] What are common API vulnerabilities?
+- [ ] What is SQL/NoSQL injection?
+Key answer:
+
+“Pydantic automatically validates incoming request data, which prevents malformed or invalid payloads from reaching the application logic.”
+
+---
+
+## SECTION 9: “Tradeoffs” Section
+
+- [ ] Why choose Neo4j over PostgreSQL?
+- [ ] Why choose Redis over in-process caching?
+- [ ] Why choose FastAPI over Flask?
+- [ ] Why Docker Compose instead of Kubernetes?
+- [ ] Why use REST instead of GraphQL?
+- [ ] Why cache paths instead of recomputing?
+- [ ] Why use shortestPath() instead of implementing BFS manually?
+- [ ] Why use bidirectional BFS?
+- [ ] What are downsides of graph databases?
+- [ ] What are downsides of caching?
+
+---
+
+## SECTION 10: “Failure Scenarios” 
+
+- [ ] What happens if Redis is unavailable?
+- [ ] What happens if Neo4j is unavailable?
+- [ ] What happens if the path doesn’t exist?
+- [ ] What happens if invalid IDs are provided?
+- [ ] What happens if the dataset grows 1000x?
+- [ ] What if memory usage becomes too high?
+- [ ] What if cache size grows indefinitely?
+- [ ] What if too many users hit the API simultaneously?
+
+Key answer:
+
+“In distributed systems, failure is expected, not exceptional. The system should fail gracefully instead of crashing entirely.”
+
+---
+
+## SECTION 11: “Resume Defense Questions”
+
+- [ ] Why did you choose this project?
+- [ ] What was the hardest technical challenge?
+- [ ] What bug took the longest to solve?
+- [ ] What would you improve next?
+- [ ] What feature are you most proud of?
+- [ ] What did you learn from this project?
+- [ ] What would you redesign if starting over?
+- [ ] What part was hardest to understand?
+- [ ] What would break first at scale?
+- [ ] Did you work alone or in a team?
+- [ ] How long did it take?
+- [ ] What was your biggest engineering decision?
+
+ ---
+
+ ## SECTION 12: “Scalability Deep Dive”
+
+ - [ ] How would you scale this to 100M users?
+ - [ ] Horizontal vs Vertical scaling?
+ - [ ] Should Neo4j be clustered?
+ - [ ] Sharding strategy?
+ - [ ] Redis replication?
+ - [ ] Load balancing?
+ - [ ] Database connection pooling?
+ - [ ] Caching at scale?
+ - [ ] Monitoring?
+ - [ ] What happens at 1 million users?
+ - [ ] What happens at 100 million users?
+ - [ ] Can shortestPath become expensive?
+ - [ ] How would sharding work in graph databases?
+ - [ ] What is stateless architecture?
+ - [ ] Why are containers useful for scaling?
+
+## SECTION 13: Expected Interview Questions with Model Answers
 
 ### "Walk me through your project."
 > *"I built a social network pathfinding engine that finds the shortest connection between any two users. It's built with FastAPI as the web layer, Neo4j as the graph database, and Redis for caching. I used the Stanford SNAP Facebook dataset — 4,039 real users and 88,234 connections. The core feature is a pathfinding endpoint that checks Redis first for a cached result; on a miss, it queries Neo4j using its native shortestPath function which internally runs bidirectional BFS. The result is then cached in Redis with a 1-hour TTL. The whole system is containerised with Docker Compose and you can explore the graph visually through the Neo4j Browser."*
