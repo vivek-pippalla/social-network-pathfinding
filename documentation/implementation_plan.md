@@ -1,18 +1,8 @@
-# 5-Day Project Execution Plan: Pathfinding Engine
-
-## Goal Description
-
-To completely transform the mock-based prototype into a production-grade **Distributed Social Network Pathfinding Engine** using **FastAPI, Neo4j, and Redis**. The project is scoped to be completed in exactly **5 Days**, resulting in a high-impact, resume-ready portfolio piece designed to impress tech startups.
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Tech Stack Finalization**
-> This plan commits to the following tech stack: **FastAPI** (Web Framework), **Neo4j** (Native Graph Database for Pathfinding), and **Redis** (Caching Layer). Please review the 5-day milestone blocks. If you approve, I will generate the `task.md` and we will immediately begin executing **Day 1**.
+# Project Execution Plan: Pathfinding Engine
 
 ---
 
-## 🎯 Requirements Specification
+##  Requirements Specification
 
 ### Functional Requirements (FR)
 1. **User Management:** API to create users and fetch user details.
@@ -28,9 +18,9 @@ To completely transform the mock-based prototype into a production-grade **Distr
 
 ---
 
-## 📅 5-Day Milestone Blocks
+## Milestone Blocks
 
-### 🧱 Block 1: Infrastructure & Skeleton (Day 1)
+### Block 1: Infrastructure & Skeleton
 **Goal:** Tear down the old mocks and set up the foundation.
 *   **Tasks:**
     *   Delete the flat `src/` mock files.
@@ -40,7 +30,7 @@ To completely transform the mock-based prototype into a production-grade **Distr
     *   Update `requirements.txt` (`fastapi`, `uvicorn`, `neo4j`, `redis`).
 *   **Validation:** Docker compose spins up all 3 containers, and FastAPI serves a health check at `localhost:5000/health`.
 
-### 🗄️ Block 2: Data Layer & Relationships (Day 2)
+### Block 2: Data Layer & Relationships
 **Goal:** Connect to the databases and build the basic social graph.
 *   **Tasks:**
     *   Implement the Neo4j connection manager (`app/db/neo4j_db.py`).
@@ -49,7 +39,7 @@ To completely transform the mock-based prototype into a production-grade **Distr
     *   Build the Connection Endpoints: `POST /connections`, `DELETE /connections`.
 *   **Validation:** You can use Postman/Swagger to create users and link them together in the Neo4j database.
 
-### 🚀 Block 3: Pathfinding & Caching (Day 3)
+### Block 3: Pathfinding & Caching
 **Goal:** Implement the core algorithm and make it blazing fast.
 *   **Tasks:**
     *   Write the Cypher query in Neo4j to find the shortest path between two nodes.
@@ -58,7 +48,7 @@ To completely transform the mock-based prototype into a production-grade **Distr
     *   Add caching logic: Before querying Neo4j, check if the path `A->B` exists in Redis. If found, return instantly. If not, query Neo4j and store in Redis with a TTL (Time To Live).
 *   **Validation:** Querying the same path twice shows a 10x speedup on the second request due to a cache hit.
 
-### 🧠 Block 4: AI Recommendations & Polish (Day 4)
+### Block 4: AI Recommendations & Polish
 **Goal:** Add the "Wow Factor" for startups and ensure edge cases are handled.
 *   **Tasks:**
     *   Create the Recommendation Endpoint: `GET /suggestions/{user_id}`.
@@ -66,7 +56,7 @@ To completely transform the mock-based prototype into a production-grade **Distr
     *   Implement global exception handling (e.g., returning proper 404s if a user doesn't exist, instead of crashing).
 *   **Validation:** Calling the suggestions endpoint returns a smart list of users to connect with.
 
-### 🧪 Block 5: Testing & Resume Readiness (Day 5)
+### Block 5: Testing & Resume Readiness
 **Goal:** Prove the code works and make it look professional on GitHub.
 *   **Tasks:**
     *   Set up `pytest` and write unit tests for the endpoints.

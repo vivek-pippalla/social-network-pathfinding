@@ -197,11 +197,11 @@ def get_shortest_path(
 All raw database queries are isolated in repository files. The service never writes Cypher directly.
 
 ```python
-# ✅ Correct — service calls repository
+#  Correct — service calls repository
 def find_shortest_path(driver, start_id, end_id):
     path = graph_repo.find_shortest_path(driver, start_id, end_id)  # Repository handles DB
 
-# ❌ Wrong — service writing Cypher directly (breaks separation of concerns)
+#  Wrong — service writing Cypher directly (breaks separation of concerns)
 def find_shortest_path(driver, start_id, end_id):
     result = driver.session().run("MATCH path = shortestPath(...)...")
 ```
