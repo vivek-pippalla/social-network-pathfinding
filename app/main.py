@@ -1,36 +1,37 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.logging_config import setup_logging
 from app.db.neo4j_db import get_driver, close_driver
-from app.api import routes_users, routes_graph
+from app.api import routes_users, routes_graph, routes_auth, routes_friends
 
-# Initialise structured logging before anything else
 setup_logging()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage startup and shutdown events."""
-    # Startup: warm up the Neo4j driver (verifies connectivity)
     get_driver()
     yield
-    # Shutdown: close the driver gracefully
     close_driver()
 
 
 app = FastAPI(
     title="Social Network Pathfinding API",
     description=(
-        "A production-grade backend that finds shortest connection paths "
-        "between users in a social graph, backed by Neo4j and Redis."
+        "A production-grade social graph API backed by Neo4j and Redis.\n\n"
+        "**Public:** `/distance`, `/suggestions/{user_id}`, `/profile/{user_id}`\n\n"
+        "**Protected:** Register at `/api/v1/auth/register`, click **Authorize** above, "
+        "then access `/suggestions/me`, `/profile/me`, `/friends/{friend_id}`."
     ),
-    version="1.0.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
-# CORS — allow all origins in development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,9 +40,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
-app.include_router(routes_users.router)
+# route order matters: graph router registers /suggestions/me before /suggestions/{user_id}
+app.include_router(routes_auth.router)
 app.include_router(routes_graph.router)
+app.include_router(routes_users.router)
+app.include_router(routes_friends.router)
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/health", tags=["Health"], summary="API health check")

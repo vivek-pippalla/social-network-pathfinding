@@ -41,6 +41,20 @@ def find_shortest_path(driver: Driver, start_id: str, end_id: str) -> list[str] 
         return record["path"] if record else None
 
 
+def remove_connection(driver: Driver, user_id_1: str, user_id_2: str) -> None:
+    """Delete the CONNECTED relationship between two users if it exists."""
+    with driver.session() as session:
+        session.run(
+            """
+            MATCH (a:User {id: $u1})-[r:CONNECTED]-(b:User {id: $u2})
+            DELETE r
+            """,
+            u1=user_id_1,
+            u2=user_id_2,
+        )
+    logger.info(f"Connection removed: {user_id_1} <-> {user_id_2}")
+
+
 def get_friend_suggestions(driver: Driver, user_id: str) -> list[tuple]:
     """
     Find 'Friends of Friends' (2-hop neighbours) not yet connected to the user.

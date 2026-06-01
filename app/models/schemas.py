@@ -2,7 +2,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-# ─── User ───────────────────────────────────────────────────────────────────
+# ─── User ────────────────────────────────────────────────────────────────────
 
 class UserCreate(BaseModel):
     name: str
@@ -46,3 +46,25 @@ class SuggestedUser(BaseModel):
 class SuggestionResponse(BaseModel):
     user_id: str
     suggestions: list[SuggestedUser]
+
+
+# ─── Authentication ──────────────────────────────────────────────────────────
+
+class UserRegister(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: Optional[str] = None

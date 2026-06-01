@@ -26,7 +26,7 @@ services:
       - "7474:7474"   # Neo4j Browser UI
       - "7687:7687"   # Bolt Protocol
     environment:
-      - NEO4J_AUTH=neo4j/password123
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
     volumes:
       - neo4j_data:/data
     restart: unless-stopped
@@ -57,9 +57,51 @@ services:
       timeout: 5s
       retries: 5
 
+  # Prometheus metrics collector
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: social-network-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - social-network
+
+  # Grafana dashboards
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: social-network-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - social-network
+
 volumes:
   neo4j_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   social-network:

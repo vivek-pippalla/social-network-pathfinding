@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/local /usr/local
 
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 COPY requirements.txt .
 
 ENV PYTHONPATH="/app"
