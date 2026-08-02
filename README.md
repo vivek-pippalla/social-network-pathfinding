@@ -17,6 +17,7 @@ Built with **FastAPI**, **Neo4j**, and **Redis**, seeded with the real-world [St
 - [API Endpoints](#api-endpoints)
 - [Authentication](#authentication)
 - [Graph Visualization](#graph-visualization)
+- [Monitoring](#monitoring)
 - [Getting Started](#getting-started)
 - [Running Tests](#running-tests)
 - [Performance](#performance)
@@ -44,6 +45,7 @@ The system also provides a **"People You May Know"** endpoint — ranking friend
 | **Profile Management** | View and update your own profile; view any user's public profile |
 | **JWT Authentication** | Register/login flow; protected endpoints require a Bearer token |
 | **Graph Visualization** | Interactive vis.js demo at `http://localhost:5000` |
+| **Monitoring** | Prometheus metrics + Grafana dashboards (`http://localhost:3000`) |
 | **Layered Architecture** | Strict Router → Service → Repository → DB separation |
 | **Containerized** | Docker Compose with health-check-based startup ordering |
 | **Structured Logging** | JSON-formatted logs across all layers |
@@ -59,6 +61,7 @@ The system also provides a **"People You May Know"** endpoint — ranking friend
 | Graph Database | Neo4j 5.12 |
 | Caching | Redis 7 |
 | Authentication | JWT (python-jose) + bcrypt (passlib) |
+| Monitoring | Prometheus 2.47 + Grafana 10.1 |
 | Containerization | Docker + Docker Compose |
 | Testing | pytest + httpx |
 | Language | Python 3.11 |
@@ -253,6 +256,29 @@ A browser-based demo is served at **`http://localhost:5000`** (redirects to `/st
 
 ---
 
+## Monitoring
+
+The stack ships with **Prometheus** and **Grafana** via Docker Compose — no extra setup required.
+
+| Service | URL | Credentials |
+|---|---|---|
+| Prometheus | `http://localhost:9090` | — |
+| Grafana | `http://localhost:3000` | `admin` / `admin` |
+
+Prometheus scrapes the FastAPI app's `/metrics` endpoint. Grafana is pre-provisioned with a datasource pointing at Prometheus and includes a sample dashboard under `monitoring/grafana/dashboards/`.
+
+```
+monitoring/
+├── prometheus.yml                    # Scrape config (targets the api service)
+└── grafana/
+    ├── datasources/datasources.yml   # Auto-provisions Prometheus datasource
+    └── dashboards/
+        ├── dashboards.yml            # Dashboard provider config
+        └── sample-dashboard.json     # Pre-built API metrics dashboard
+```
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -302,6 +328,8 @@ This downloads the Stanford SNAP Facebook dataset and batch-imports **4,039 user
 | `http://localhost:5000` | Graph visualization demo |
 | `http://localhost:5000/docs` | Swagger UI (interactive API docs) |
 | `http://localhost:7474` | Neo4j Browser (`neo4j` / value from your `.env`) |
+| `http://localhost:9090` | Prometheus metrics explorer |
+| `http://localhost:3000` | Grafana dashboards (`admin` / `admin`) |
 
 ---
 
@@ -382,6 +410,14 @@ social-network-pathfinding/
 │   ├── architecture_deep_dive.md # HLD → LLD with code examples
 │   ├── project_journal.md        # Full guide + interview prep
 │   └── interview_guide.md        # Complete interview walkthrough (pitches, Q&A, demo script)
+├── monitoring/
+│   ├── prometheus.yml            # Prometheus scrape config
+│   └── grafana/
+│       ├── datasources/
+│       │   └── datasources.yml   # Auto-provisions Prometheus datasource
+│       └── dashboards/
+│           ├── dashboards.yml    # Dashboard provider config
+│           └── sample-dashboard.json
 ├── nginx/
 │   └── nginx.conf                # Reverse proxy config (optional, not in default compose)
 ├── .env.example                  # Template — copy to .env and fill in values
