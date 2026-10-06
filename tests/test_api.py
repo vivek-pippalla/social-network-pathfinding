@@ -15,7 +15,7 @@ Run with:  pytest tests/ -v
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, call
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -101,6 +101,41 @@ def test_search_users_returns_list():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 3 — User Profile Management (authenticated)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_get_my_profile_success(auth):
+    """GET /users/me should return the profile of the authenticated user."""
+    mock_user = {"id": "test-user-id", "name": "Test User", "email": "test@example.com"}
+    with patch("app.api.routes_users.user_service.get_user", return_value=mock_user) as mock_get_user:
+        res = client.get("/api/v1/users/me")
+
+    assert res.status_code == 200
+    assert res.json()["id"] == "test-user-id"
+    assert res.json()["name"] == "Test User"
+    # Verify the service was called with the user_id from the JWT
+    mock_get_user.assert_called_once_with(user_id="test-user-id")
+
+
+def test_update_my_profile_success(auth):
+    """PUT /users/me should update the user's profile and return the updated data."""
+    update_payload = {"name": "Updated Name", "email": "new@example.com"}
+    updated_user_from_db = {"id": "test-user-id", **update_payload}
+
+    with patch("app.api.routes_users.user_service.update_user_profile", return_value=updated_user_from_db) as mock_update:
+        res = client.put("/api/v1/users/me", json=update_payload)
+
+    assert res.status_code == 200
+    assert res.json()["name"] == "Updated Name"
+    assert res.json()["email"] == "new@example.com"
+    # Verify the service was called with the correct user_id and payload
+    mock_update.assert_called_once_with(
+        user_id="test-user-id",
+        update_data=update_payload
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 3 — Auth endpoints
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -175,26 +210,24 @@ def test_login_unknown_email_returns_401():
 # 4 — JWT guard on protected endpoints
 # ═══════════════════════════════════════════════════════════════════════════
 
-def test_path_endpoint_requires_auth():
-    """GET /path/… without a token must return 401."""
-    res = client.get("/api/v1/path/0/150")
+@pytest.mark.parametrize("method, path, json_payload", [
+    ("GET", "/api/v1/path/0/150", None),
+    ("GET", "/api/v1/suggestions/0", None),
+    ("GET", "/api/v1/suggestions/me", None),
+    ("GET", "/api/v1/users/me", None),
+    ("PUT", "/api/v1/users/me", {"name": "test"}),
+    ("POST", "/api/v1/connections", {"user_id_1": "0", "user_id_2": "1"}),
+    ("DELETE", "/api/v1/connections", {"user_id_1": "0", "user_id_2": "1"}),
+])
+def test_protected_endpoints_require_auth(method, path, json_payload):
+    """Protected endpoints must return 401 Unauthorized without a valid token."""
+    res = client.request(method, path, json=json_payload)
     assert res.status_code == 401
-
-
-def test_suggestions_endpoint_requires_auth():
-    """GET /suggestions/… without a token must return 401."""
-    res = client.get("/api/v1/suggestions/0")
-    assert res.status_code == 401
-
-
-def test_connections_endpoint_requires_auth():
-    """POST /connections without a token must return 401."""
-    res = client.post("/api/v1/connections", json={"user_id_1": "0", "user_id_2": "1"})
-    assert res.status_code == 401
+    assert "Could not validate credentials" in res.json()["detail"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 5 — Pathfinding (authenticated)
+# 5 — Graph Endpoints (authenticated)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_path_returns_cached_result(auth):
@@ -236,20 +269,17 @@ def test_path_not_found_returns_404(auth):
     assert res.status_code == 404
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 6 — Connections & Suggestions (authenticated)
-# ═══════════════════════════════════════════════════════════════════════════
-
 def test_create_connection_success(auth):
     """POST /connections creates a link and returns a confirmation message."""
-    with patch("app.api.routes_graph.graph_repo.create_connection", return_value=None):
+    with patch("app.api.routes_graph.graph_repo.create_connection") as mock_create:
         res = client.post("/api/v1/connections", json={"user_id_1": "0", "user_id_2": "1"})
     assert res.status_code == 201
     assert "created" in res.json()["message"].lower()
+    mock_create.assert_called_once_with(driver=mock_create.call_args[1]['driver'], user_id_1='0', user_id_2='1')
 
 
-def test_get_suggestions_returns_list(auth):
-    """GET /suggestions returns ranked friend-of-friend suggestions."""
+def test_get_suggestions_for_user_id_returns_list(auth):
+    """GET /suggestions/{user_id} returns ranked friend-of-friend suggestions."""
     mock_raw = [("200", 5), ("300", 3), ("400", 1)]
     with patch("app.services.pathfinder.graph_repo.get_friend_suggestions", return_value=mock_raw):
         res = client.get("/api/v1/suggestions/0")
@@ -259,3 +289,30 @@ def test_get_suggestions_returns_list(auth):
     assert len(data["suggestions"]) == 3
     assert data["suggestions"][0]["user_id"] == "200"
     assert data["suggestions"][0]["mutual_friends"] == 5
+
+
+def test_get_my_suggestions_uses_jwt_user_id(auth):
+    """GET /suggestions/me should call the service with the user ID from the JWT."""
+    with patch("app.api.routes_graph.pathfinder.get_suggestions") as mock_get_suggestions:
+        # Mock the service layer function called by the router
+        mock_get_suggestions.return_value = {
+            "user_id": "test-user-id",
+            "suggestions": [{"user_id": "200", "mutual_friends": 5}]
+        }
+        res = client.get("/api/v1/suggestions/me")
+
+    assert res.status_code == 200
+    assert res.json()["user_id"] == "test-user-id"
+    # Verify the service was called with the correct ID from the 'auth' fixture
+    mock_get_suggestions.assert_called_once_with(driver=mock_get_suggestions.call_args[1]['driver'], user_id="test-user-id")
+
+
+def test_delete_connection_success(auth):
+    """DELETE /connections removes a link and returns a confirmation message."""
+    # This test assumes the DELETE endpoint is implemented in routes_graph.py
+    with patch("app.api.routes_graph.graph_repo.remove_connection") as mock_remove:
+        res = client.delete("/api/v1/connections", json={"user_id_1": "0", "user_id_2": "1"})
+
+    assert res.status_code == 200  # Assuming 200 OK with a message
+    assert "removed" in res.json()["message"].lower()
+    mock_remove.assert_called_once_with(driver=mock_remove.call_args[1]['driver'], user_id_1='0', user_id_2='1')

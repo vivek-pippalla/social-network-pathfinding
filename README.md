@@ -36,20 +36,20 @@ The system also provides a **"People You May Know"** endpoint — ranking friend
 
 ## Features
 
-| Feature | Detail |
-|---|---|
-| **Shortest Path** | Minimum hops between any two users via Neo4j bidirectional BFS |
-| **Redis Caching** | Cache-aside with order-independent keys; ~150 ms → sub-10 ms on cache hits |
-| **Friend Suggestions** | Public (`/suggestions/{user_id}`) and personalized (`/suggestions/me`) via JWT |
-| **Friend Management** | Add and remove connections (`POST`/`DELETE /friends/{friend_id}`) |
-| **Profile Management** | View and update your own profile; view any user's public profile |
-| **JWT Authentication** | Register/login flow; protected endpoints require a Bearer token |
-| **Graph Visualization** | Interactive vis.js demo at `http://localhost:5000` |
-| **Monitoring** | Prometheus metrics + Grafana dashboards (`http://localhost:3000`) |
-| **Layered Architecture** | Strict Router → Service → Repository → DB separation |
-| **Containerized** | Docker Compose with health-check-based startup ordering |
-| **Structured Logging** | JSON-formatted logs across all layers |
-| **CI Pipeline** | GitHub Actions runs the full test suite on every push |
+| Feature                  | Detail                                                                     |
+| --------------------------| ----------------------------------------------------------------------------|
+| **Shortest Path**        | Minimum hops between any two users via protected endpoint                  |
+| **Redis Caching**        | Cache-aside with order-independent keys; ~150 ms → sub-10 ms on cache hits |
+| **Friend Suggestions**   | "Friends of friends" ranked by mutual connections (protected endpoint)     |
+| **Friend Management**    | Add and remove connections (`POST`/`DELETE /api/v1/connections`)           |
+| **Profile Management**   | Create, view, search, and update user profiles                             |
+| **JWT Authentication**   | Register/login flow; protected endpoints require a Bearer token            |
+| **Graph Visualization**  | Interactive vis.js demo at `http://localhost:5000`                         |
+| **Monitoring**           | Prometheus metrics + Grafana dashboards (`http://localhost:3000`)          |
+| **Layered Architecture** | Strict Router → Service → Repository → DB separation                       |
+| **Containerized**        | Docker Compose with health-check-based startup ordering                    |
+| **Structured Logging**   | JSON-formatted logs across all layers                                      |
+| **CI Pipeline**          | GitHub Actions runs the full test suite on every push                      |
 
 ---
 
