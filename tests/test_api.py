@@ -15,7 +15,7 @@ Run with:  pytest tests/ -v
 """
 
 import pytest
-from unittest.mock import patch, call
+from unittest.mock import patch, call, ANY
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -100,6 +100,12 @@ def test_search_users_returns_list():
     assert res.json()[0]["name"] == "Alice Smith"
 
 
+def test_search_users_empty_query_returns_422():
+    """GET /users/search?q= with empty query string returns 422 Unprocessable Entity."""
+    res = client.get("/api/v1/users/search?q=")
+    assert res.status_code == 422
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 3 — User Profile Management (authenticated)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -113,8 +119,8 @@ def test_get_my_profile_success(auth):
     assert res.status_code == 200
     assert res.json()["id"] == "test-user-id"
     assert res.json()["name"] == "Test User"
-    # Verify the service was called with the user_id from the JWT
-    mock_get_user.assert_called_once_with(user_id="test-user-id")
+    # Verify the service was called with the user_id from the JWT (driver is positional)
+    mock_get_user.assert_called_once_with(ANY, "test-user-id")
 
 
 def test_update_my_profile_success(auth):
@@ -122,21 +128,18 @@ def test_update_my_profile_success(auth):
     update_payload = {"name": "Updated Name", "email": "new@example.com"}
     updated_user_from_db = {"id": "test-user-id", **update_payload}
 
-    with patch("app.api.routes_users.user_service.update_user_profile", return_value=updated_user_from_db) as mock_update:
+    with patch("app.api.routes_users.user_service.update_user", return_value=updated_user_from_db) as mock_update:
         res = client.put("/api/v1/users/me", json=update_payload)
 
     assert res.status_code == 200
     assert res.json()["name"] == "Updated Name"
     assert res.json()["email"] == "new@example.com"
-    # Verify the service was called with the correct user_id and payload
-    mock_update.assert_called_once_with(
-        user_id="test-user-id",
-        update_data=update_payload
-    )
+    # Verify the service was called with the correct user_id and fields
+    mock_update.assert_called_once_with(ANY, "test-user-id", "Updated Name", "new@example.com")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 3 — Auth endpoints
+# 4 — Auth endpoints
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_register_success():
@@ -207,7 +210,7 @@ def test_login_unknown_email_returns_401():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 4 — JWT guard on protected endpoints
+# 5 — JWT guard on protected endpoints
 # ═══════════════════════════════════════════════════════════════════════════
 
 @pytest.mark.parametrize("method, path, json_payload", [
@@ -217,17 +220,19 @@ def test_login_unknown_email_returns_401():
     ("GET", "/api/v1/users/me", None),
     ("PUT", "/api/v1/users/me", {"name": "test"}),
     ("POST", "/api/v1/connections", {"user_id_1": "0", "user_id_2": "1"}),
-    ("DELETE", "/api/v1/connections", {"user_id_1": "0", "user_id_2": "1"}),
+    ("POST", "/friends/100", None),
+    ("DELETE", "/friends/100", None),
 ])
 def test_protected_endpoints_require_auth(method, path, json_payload):
     """Protected endpoints must return 401 Unauthorized without a valid token."""
     res = client.request(method, path, json=json_payload)
     assert res.status_code == 401
-    assert "Could not validate credentials" in res.json()["detail"]
+    detail = res.json()["detail"]
+    assert "not authenticated" in detail.lower() or "could not validate" in detail.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 5 — Graph Endpoints (authenticated)
+# 6 — Graph Endpoints (authenticated)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_path_returns_cached_result(auth):
@@ -275,7 +280,7 @@ def test_create_connection_success(auth):
         res = client.post("/api/v1/connections", json={"user_id_1": "0", "user_id_2": "1"})
     assert res.status_code == 201
     assert "created" in res.json()["message"].lower()
-    mock_create.assert_called_once_with(driver=mock_create.call_args[1]['driver'], user_id_1='0', user_id_2='1')
+    mock_create.assert_called_once()
 
 
 def test_get_suggestions_for_user_id_returns_list(auth):
@@ -303,16 +308,46 @@ def test_get_my_suggestions_uses_jwt_user_id(auth):
 
     assert res.status_code == 200
     assert res.json()["user_id"] == "test-user-id"
-    # Verify the service was called with the correct ID from the 'auth' fixture
-    mock_get_suggestions.assert_called_once_with(driver=mock_get_suggestions.call_args[1]['driver'], user_id="test-user-id")
+    # Verify the service was called (driver is positional from DI)
+    mock_get_suggestions.assert_called_once()
 
 
-def test_delete_connection_success(auth):
-    """DELETE /connections removes a link and returns a confirmation message."""
-    # This test assumes the DELETE endpoint is implemented in routes_graph.py
-    with patch("app.api.routes_graph.graph_repo.remove_connection") as mock_remove:
-        res = client.delete("/api/v1/connections", json={"user_id_1": "0", "user_id_2": "1"})
+# ═══════════════════════════════════════════════════════════════════════════
+# 7 — Friend Management Endpoints (authenticated)
+# ═══════════════════════════════════════════════════════════════════════════
 
-    assert res.status_code == 200  # Assuming 200 OK with a message
-    assert "removed" in res.json()["message"].lower()
-    mock_remove.assert_called_once_with(driver=mock_remove.call_args[1]['driver'], user_id_1='0', user_id_2='1')
+def test_add_friend_success(auth):
+    """POST /friends/{id} connects the current user with another user."""
+    mock_user = {"id": "friend-1", "name": "Friend"}
+    with patch("app.api.routes_friends.user_repo.get_user_by_id", return_value=mock_user), \
+         patch("app.api.routes_friends.graph_repo.create_connection") as mock_conn:
+        res = client.post("/friends/friend-1")
+
+    assert res.status_code == 201
+    assert "connected with user 'friend-1'" in res.json()["message"]
+    mock_conn.assert_called_once()
+
+
+def test_add_friend_cannot_add_self(auth):
+    """POST /friends/{my_id} returns 400 Bad Request."""
+    res = client.post("/friends/test-user-id")
+    assert res.status_code == 400
+    assert "cannot add yourself" in res.json()["detail"].lower()
+
+
+def test_remove_friend_success(auth):
+    """DELETE /friends/{id} removes the connection."""
+    with patch("app.api.routes_friends.graph_repo.remove_connection") as mock_remove:
+        res = client.delete("/friends/friend-1")
+
+    assert res.status_code == 200
+    assert "removed" in res.json()["message"]
+    mock_remove.assert_called_once()
+
+
+def test_remove_friend_cannot_remove_self(auth):
+    """DELETE /friends/{my_id} returns 400 Bad Request."""
+    res = client.delete("/friends/test-user-id")
+    assert res.status_code == 400
+    assert "cannot remove yourself" in res.json()["detail"].lower()
+

@@ -1,0 +1,39 @@
+# ==============================================================================
+# Caddy Reverse Proxy Configuration for Social Network Pathfinding Engine
+#
+# Features:
+# 1. Automatic HTTPS: Obtains and renews Let's Encrypt / ZeroSSL TLS certificates
+# 2. HTTP -> HTTPS Redirection: Listens on port 80 and redirects to 443
+# 3. Reverse Proxy: Forwards decrypted HTTPS traffic internally to api:5000
+# 4. Strict Security Headers: HSTS, nosniff, frame protection, referrer policy
+# ==============================================================================
+
+{$DOMAIN_NAME:localhost} {
+    # Reverse proxy to the FastAPI container on the internal Docker network
+    reverse_proxy api:5000 {
+        header_up Host {upstream_hostport}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Modern Security Headers
+    header {
+        # HTTP Strict Transport Security (HSTS)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # Clickjacking mitigation
+        X-Frame-Options "DENY"
+        # Referrer privacy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server identifier disclosure
+        -Server
+    }
+
+    # Logging configuration
+    log {
+        output stdout
+        format console
+    }
+}

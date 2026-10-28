@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from neo4j import Driver
 
 from app.core.auth import get_current_user
@@ -15,7 +15,10 @@ def create_user(user: UserCreate, driver: Driver = Depends(get_driver)):
 
 
 @router.get("/search", response_model=list[UserResponse], summary="Search users by name")
-def search_users(q: str, driver: Driver = Depends(get_driver)):
+def search_users(
+    q: str = Query(..., min_length=1, max_length=100, description="Search query string"),
+    driver: Driver = Depends(get_driver),
+):
     return user_service.search_users(driver, q)
 
 

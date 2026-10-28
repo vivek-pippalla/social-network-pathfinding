@@ -22,6 +22,12 @@ mongo_data/
 .DS_Store
 Thumbs.db
 
-# Other
+# Secrets & Environment variables
+.env
+.env.*
 *.env
-documentation/
+!*.env.example
+!*.env.prod.example
+
+documentation/*
+!documentation/aws_deployment_guide.md
