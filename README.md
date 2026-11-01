@@ -34,7 +34,7 @@ Built with **FastAPI**, **Neo4j**, and **Redis**, backed by the real-world [Stan
 
 Given two user IDs, the engine computes the shortest path through the social graph using Neo4j's built-in **bidirectional BFS** (`shortestPath()`). Results are cached in Redis using order-independent keys so repeated queries return in under 10 ms.
 
-The system also provides **"People You May Know"** recommendations — ranking friend-of-friend suggestions by mutual friend count using the Triadic Closure algorithm — available as both a public endpoint and a personalized `/me` variant derived from your JWT token.
+The system also provides **"People You May Know"** recommendations — ranking friend-of-friend suggestions by mutual friend count using the Triadic Closure algorithm — available through an authenticated endpoint for any user and a personalized `/me` endpoint derived from your JWT token.
 
 ---
 
@@ -68,7 +68,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
 - **AWS IAM:** Strict least-privilege instance roles and GitHub Actions trust policies.
 - **Amazon CloudWatch:** Centralized structured JSON log shipping with stream auto-naming and retention.
 - **Amazon ECR:** Private container registry for multi-stage production Docker images.
-- **GitHub Actions:** CI test execution (51 unit tests) + OIDC-based deployment pipeline.
+- **GitHub Actions:** CI test execution with pytest + OIDC-based deployment pipeline.
 
 ---
 
@@ -89,14 +89,14 @@ The system also provides **"People You May Know"** recommendations — ranking f
  │  ┌──────────────────────────────────────────────────────────┴────────────────────┐   │
  │  │ Amazon EC2 (t3.medium: 2 vCPU, 4GB RAM + 2GB Swap)                             │   │
  │  │                                                                                │   │
- │  │  Security Group: Inbound 22 (SSH Admin), Inbound 5000 (FastAPI Web)            │   │
+ │  │  Security Group: Inbound 22 (SSH Admin), 80 (HTTP), 443 (HTTPS)                │   │
  │  │                                                                                │   │
  │  │   ┌────────────────────────────────────────────────────────────────────────┐   │   │
  │  │   │ Docker Network: internal-network (Bridge)                              │   │   │
  │  │   │                                                                        │   │   │
  │  │   │   ┌────────────────────────┐        ┌───────────────────────────────┐  │   │   │
  │  │   │   │   FastAPI App (ECR)    │───────▶│      Redis 7 Cache (LRU)      │  │   │   │
- │  │   │   │   (Port 5000 -> Host)  │        │      (Internal port 6379)     │  │   │   │
+ │  │   │   │   (Internal port 5000) │        │      (Internal port 6379)     │  │   │   │
  │  │   │   └──────────┬─────────────┘        │      (Shielded from Host)     │  │   │   │
  │  │   │              │                      └───────────────────────────────┘  │   │   │
  │  │   │              ▼                                                         │   │   │
@@ -117,7 +117,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
                │
  ┌─────────────┴─────────────────────────────────────────────────────────────────────────┐
  │ GitHub Actions (CI/CD Pipeline)                                                        │
- │ 1. Pytest Unit Tests (45 tests: API, S3 ingestion, CloudWatch logging, Friends)        │
+ │ 1. Pytest suite (API, S3 ingestion, CloudWatch logging, deployment, Caddy config)       │
  │ 2. Build multi-stage Docker image                                                     │
  │ 3. AWS OIDC STS AssumeRoleWithWebIdentity (Keyless) -> Push to ECR                    │
  │ 4. SSH to EC2 -> Pull latest ECR image -> Update containers -> Healthcheck            │
@@ -137,20 +137,21 @@ The system also provides **"People You May Know"** recommendations — ranking f
 
 ## API Reference
 
-### Public Endpoints
+### Public Endpoints (No JWT Required)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Application health check |
 | `POST` | `/api/v1/auth/register` | Register new user account (returns JWT) |
 | `POST` | `/api/v1/auth/token` | Login via OAuth2 password flow (returns JWT) |
-| `GET` | `/api/v1/path/{user1}/{user2}` | Shortest path between two users (cached in Redis) |
-| `GET` | `/api/v1/suggestions/{user_id}` | Friend-of-friend suggestions for any user ID |
 | `GET` | `/api/v1/users/{user_id}` | Retrieve public user profile |
 | `GET` | `/api/v1/users/search?q=` | Search user profiles by name |
+| `POST` | `/api/v1/users/` | Create a user without a password |
 
 ### Protected Endpoints (Bearer JWT Required)
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/api/v1/path/{user1}/{user2}` | Shortest path between two users (cached in Redis) |
+| `GET` | `/api/v1/suggestions/{user_id}` | Friend-of-friend suggestions for any user ID |
 | `GET` | `/api/v1/suggestions/me` | Personalized friend suggestions for authenticated user |
 | `GET` | `/api/v1/users/me` | Retrieve authenticated user's profile |
 | `PUT` | `/api/v1/users/me` | Update authenticated user's profile |
@@ -198,7 +199,7 @@ docker exec -it social-network-api python scripts/seed_data.py
 The test suite runs 100% offline with zero live infrastructure dependencies by mocking database and AWS SDK calls:
 
 ```bash
-# Run all 51 unit tests
+# Run the complete test suite
 pytest tests/ -v
 ```
 
@@ -253,10 +254,11 @@ social-network-pathfinding/
 │   └── seed_data.py               # Dataset ingestion pipeline (S3/URL/Local)
 ├── tests/
 │   ├── conftest.py                # Pytest mock fixtures
-│   ├── test_api.py                # Core API & auth test suite (31 tests)
-│   ├── test_cloudwatch_logging.py # CloudWatch integration test suite (5 tests)
-│   ├── test_deploy_script.py      # Deployment & automated rollback test suite (6 tests)
-│   └── test_s3_ingestion.py       # S3 dataset ingestion test suite (9 tests)
+│   ├── test_api.py                # Core API & auth test suite
+│   ├── test_cloudwatch_logging.py # CloudWatch logging test suite
+│   ├── test_deploy_script.py      # Deployment & rollback test suite
+│   ├── test_s3_ingestion.py       # S3 dataset ingestion test suite
+│   └── test_caddy_config.py       # Production proxy and Compose config checks
 ├── documentation/
 │   └── aws_deployment_guide.md    # Comprehensive AWS deployment guide
 ├── docker-compose.yml             # Local development stack
