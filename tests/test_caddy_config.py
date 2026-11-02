@@ -11,6 +11,7 @@ Validates:
 """
 
 import os
+import shutil
 import subprocess
 import pytest
 import yaml
@@ -65,33 +66,54 @@ def test_production_compose_caddy_and_isolation_invariants():
     # Caddy must bind host ports 80 and 443
     caddy_ports = caddy.get("ports", [])
     assert any("80:80" in str(p) for p in caddy_ports), "Caddy must listen on port 80"
-    assert any("443:443" in str(p) for p in caddy_ports), "Caddy must listen on port 443"
+    assert any("443:443" in str(p) for p in caddy_ports), (
+        "Caddy must listen on port 443"
+    )
 
     # Caddy must persist TLS certificate and configuration data
     caddy_vols = [str(v) for v in caddy.get("volumes", [])]
-    assert any("caddy_data:/data" in v for v in caddy_vols), "caddy_data volume must mount to /data"
-    assert any("caddy_config:/config" in v for v in caddy_vols), "caddy_config volume must mount to /config"
+    assert any("caddy_data:/data" in v for v in caddy_vols), (
+        "caddy_data volume must mount to /data"
+    )
+    assert any("caddy_config:/config" in v for v in caddy_vols), (
+        "caddy_config volume must mount to /config"
+    )
 
     # Declared top-level volumes must include caddy_data and caddy_config
     declared_volumes = compose.get("volumes", {})
     assert "caddy_data" in declared_volumes, "caddy_data must be in top-level volumes"
-    assert "caddy_config" in declared_volumes, "caddy_config must be in top-level volumes"
+    assert "caddy_config" in declared_volumes, (
+        "caddy_config must be in top-level volumes"
+    )
 
     # Ingress Isolation: api, neo4j, and redis must NOT expose ports to host
-    assert "ports" not in api or not api["ports"], "api service must NOT publish ports to host"
-    assert "ports" not in neo4j or not neo4j["ports"], "neo4j service must NOT publish ports to host"
-    assert "ports" not in redis or not redis["ports"], "redis service must NOT publish ports to host"
+    assert "ports" not in api or not api["ports"], (
+        "api service must NOT publish ports to host"
+    )
+    assert "ports" not in neo4j or not neo4j["ports"], (
+        "neo4j service must NOT publish ports to host"
+    )
+    assert "ports" not in redis or not redis["ports"], (
+        "redis service must NOT publish ports to host"
+    )
 
     # api must expose internal port 5000 to Docker network
     assert "5000" in [str(p) for p in api.get("expose", [])]
 
     # Shared internal bridge network
     for s_name, s_def in services.items():
-        assert "internal-network" in s_def.get("networks", []), f"{s_name} must connect to internal-network"
+        assert "internal-network" in s_def.get("networks", []), (
+            f"{s_name} must connect to internal-network"
+        )
 
 
 def test_docker_compose_config_validation():
     """Verify that docker compose config parses docker-compose.prod.yml without syntax error."""
+    if shutil.which("docker") is None:
+        pytest.skip(
+            "docker CLI is not installed; compose configuration was not validated"
+        )
+
     env = os.environ.copy()
     env["AWS_ACCOUNT_ID"] = "123456789012"
     env["AWS_REGION"] = "ap-south-1"
@@ -105,6 +127,5 @@ def test_docker_compose_config_validation():
         capture_output=True,
         text=True,
         env=env,
-        shell=True,
     )
     assert result.returncode == 0, f"docker compose config failed: {result.stderr}"
