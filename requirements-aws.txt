@@ -1,0 +1,3 @@
+# Optional legacy S3 ingestion and CloudWatch integrations.
+boto3==1.34.0
+watchtower==3.0.1
