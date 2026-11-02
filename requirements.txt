@@ -7,7 +7,7 @@ python-dotenv==1.2.2
 
 # Databases & Caching
 neo4j==6.4.0
-redis==5.0.1
+redis==8.1.0
 
 # Authentication
 python-jose[cryptography]==3.3.0
