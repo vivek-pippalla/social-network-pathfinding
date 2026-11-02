@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** `phase-0-baseline-cleanup` (dedicated Phase 0 branch; `main` unchanged)
+- **Working branch:** phase-1-application-foundation (stacked from Phase 0; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 0 — baseline, cleanup, dependency refresh
+- **Current phase:** Phase 1 — application foundation
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-02
 
@@ -14,8 +14,8 @@
 
 | Phase | Status | Evidence / notes |
 |---|---|---|
-| Phase 0: baseline, cleanup, dependency refresh | In progress | Dedicated branch, baseline tag, test/lint results, audit triage, and remaining unverified items recorded below |
-| Phase 1: Core correctness and security | Not started | Update only after running acceptance checks |
+| Phase 0: baseline, cleanup, dependency refresh | Complete locally; final review pending | Pushed branch remains unmerged by plan; final integrated review and merge are deferred until all phases are complete |
+| Phase 1: Application foundation | Complete locally; awaiting user review | Stacked from Phase 0; local acceptance checks recorded below; no commit created |
 | Phase 2: Engineering hardening | Not started | Update only after running acceptance checks |
 | Phase 3: Optional deployment / AWS work | Deferred / optional | Not required for local rebuild; start only with explicit user approval |
 
@@ -24,10 +24,10 @@ Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / 
 ## Current task log
 
 ### Phase 0
-- **Status:** Implementation and local Phase 0 gates complete; independent reviewer PASS and merge remain pending.
-- **Branch and baseline:** `phase-0-baseline-cleanup`; `pre-rebuild` points to `e5fd4ea`; `main` remains unchanged.
+- **Status:** Local implementation and gates complete; branch pushed and intentionally unmerged until final project integration.
+- **Branch and baseline:** phase-0-baseline-cleanup at 51bf07b; pre-rebuild points to e5fd4ea; main remains unchanged.
 - **Checks:** baseline `pytest -q` 54 passed; current standard non-integration and full suites 55 passed each; Ruff and actionlint clean; pip-audit findings documented.
-- **Outstanding:** independent reviewer PASS and merge are pending. The optional boto3/watchtower pins were not installed per user instruction; a fresh runtime-only environment was not created; Docker daemon and ShellCheck are unavailable. The archived legacy `deploy_prod.sh` still fails `bash -n` with the known C-03 syntax error; Phase 11 replaces that script.
+- **Known unverified items:** Optional boto3/watchtower pins were not installed per user instruction; a fresh runtime-only environment was not created; Docker daemon and ShellCheck are unavailable; archived deploy_prod.sh retains the known C-03 syntax error for Phase 11 replacement.
 
 ## Phase completion record
 
@@ -57,4 +57,11 @@ For each phase, append:
 - **Audit:** `pip-audit -r requirements.txt` reported three rows across python-jose and ecdsa; triage is recorded in `docs/DEPENDENCY_AUDIT.md`. The audit is not clean.
 - **Not verified:** refreshed boto3/watchtower pins were not installed, per user instruction; a fresh runtime-only environment was not created. Docker daemon is unavailable. `shellcheck` is not installed. The inactive legacy `deploy_prod.sh` retains its known syntax error (C-03), to be replaced in Phase 11.
 
-- **Closeout:** No Phase 1 work started. User-provided `docs/BUILD_PLAN.md` and `docs/AGENTS.md` remain untracked and were not added to the phase commits.
+- **Closeout:** Phase 1 began on the stacked branch after the Phase 0 implementation was pushed but before final integration review. User-provided `docs/BUILD_PLAN.md` and `docs/AGENTS.md` remain untracked and were not added to Phase 0 commits.
+
+### Phase 1
+- **Status:** In progress on phase-1-application-foundation, based on the pushed Phase 0 branch.
+- **Plan workflow:** Updated locally for stacked branches, one approved commit per completed phase, and one final integration merge.
+- **Checks:** `ruff check .` passed; `ruff format --check .` reported 28 files already formatted; standard non-integration suite 74 passed; full `pytest -q` 74 passed. `pip-audit -r requirements.txt --no-deps` reported three advisory rows across `python-jose` and `ecdsa`; dependency replacement remains scheduled for Phase 3. No Phase 1 integration or browser tests were defined or run.
+- **Implemented:** Fail-fast settings and cached accessor; app factory; uniform sanitized error envelope; request-ID middleware and JSON access logging; liveness/readiness routes; conditional CORS and docs; corrected API description; CloudWatch handler moved to `optional_integrations/`; `.env.example` uses invalid placeholders; compatibility tests updated.
+- **Known unverified:** No live Neo4j/Redis readiness check was run; health dependency behavior was tested with fakes. No real server/container startup was performed. The current `.env` lacks `SECRET_KEY`, so app startup correctly refuses until a private value is configured.

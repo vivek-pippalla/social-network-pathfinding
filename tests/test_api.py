@@ -84,7 +84,7 @@ def test_get_nonexistent_user_returns_404():
     with patch("app.services.user_service.user_repo.get_user_by_id", return_value=None):
         res = client.get("/api/v1/users/does-not-exist")
     assert res.status_code == 404
-    assert "not found" in res.json()["detail"].lower()
+    assert res.json()["error"]["code"] == "USER_NOT_FOUND"
 
 
 def test_search_users_returns_list():
@@ -227,8 +227,7 @@ def test_protected_endpoints_require_auth(method, path, json_payload):
     """Protected endpoints must return 401 Unauthorized without a valid token."""
     res = client.request(method, path, json=json_payload)
     assert res.status_code == 401
-    detail = res.json()["detail"]
-    assert "not authenticated" in detail.lower() or "could not validate" in detail.lower()
+    assert res.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -332,7 +331,7 @@ def test_add_friend_cannot_add_self(auth):
     """POST /friends/{my_id} returns 400 Bad Request."""
     res = client.post("/friends/test-user-id")
     assert res.status_code == 400
-    assert "cannot add yourself" in res.json()["detail"].lower()
+    assert res.json()["error"]["code"] == "CANNOT_FRIEND_SELF"
 
 
 def test_remove_friend_success(auth):
@@ -349,5 +348,5 @@ def test_remove_friend_cannot_remove_self(auth):
     """DELETE /friends/{my_id} returns 400 Bad Request."""
     res = client.delete("/friends/test-user-id")
     assert res.status_code == 400
-    assert "cannot remove yourself" in res.json()["detail"].lower()
+    assert res.json()["error"]["code"] == "CANNOT_FRIEND_SELF"
 

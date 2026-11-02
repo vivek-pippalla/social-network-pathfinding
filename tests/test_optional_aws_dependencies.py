@@ -24,11 +24,10 @@ sys.meta_path.insert(0, BlockAwsImports())
 import app.main as main
 import app.services.s3_service
 import scripts.seed_data
-main.get_driver = lambda: None
-main.close_driver = lambda: None
 
 from fastapi.testclient import TestClient
-with TestClient(main.app) as client:
+app = main.create_app(driver_provider=lambda: object(), driver_closer=lambda: None)
+with TestClient(app) as client:
     assert client.get('/health').status_code == 200
 """
     result = subprocess.run(
