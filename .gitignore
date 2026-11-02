@@ -30,4 +30,3 @@ Thumbs.db
 !*.env.prod.example
 
 documentation/*
-!documentation/aws_deployment_guide.md

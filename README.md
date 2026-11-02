@@ -1,5 +1,7 @@
 # Social Network Pathfinding Engine (Cloud-Native Edition)
 
+> **Status:** Reconstruction is underway. Existing feature, deployment, and performance claims are being re-verified; treat them as unverified until the relevant phase records evidence.
+
 [![CI/CD Pipeline](https://github.com/vivek-pippalla/social-network-pathfinding/actions/workflows/ci.yml/badge.svg)](https://github.com/vivek-pippalla/social-network-pathfinding/actions/workflows/ci.yml)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688.svg)](https://fastapi.tiangolo.com)
@@ -212,59 +214,25 @@ pytest tests/ -v
 
 ---
 
-## AWS Production Deployment
+## Historical AWS Deployment Material
 
-For the complete step-by-step AWS deployment walkthrough, IAM policies, and cost mitigation instructions, refer to:
+The previous AWS guide and deployment files are inactive historical references. They have not been retested since the AWS account closed:
 
-👉 **[AWS Production Deployment Guide](documentation/aws_deployment_guide.md)**
+👉 **[Inactive AWS deployment reference](deploy/aws/legacy/README.md)**
 
 ---
 
 ## Project Structure
 
-```
+```text
 social-network-pathfinding/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                 # GitHub Actions CI/CD with AWS OIDC federation
-├── app/
-│   ├── api/                       # Router layer (REST endpoints)
-│   ├── core/                      # Config, auth, exceptions, logging
-│   │   ├── config.py              # Pydantic v2 settings
-│   │   └── logging_config.py      # CloudWatch + structured JSON logging
-│   ├── db/                        # Neo4j & Redis connection singletons
-│   ├── models/                    # Pydantic request/response schemas
-│   ├── repositories/              # Cypher query & graph repository layer
-│   ├── services/                  # Business logic & algorithms
-│   │   ├── pathfinder.py          # Shortest path & triadic closure
-│   │   ├── s3_service.py          # S3 dataset downloader & edge validator
-│   │   └── user_service.py        # User profile management
-│   ├── static/                    # Frontend UI (HTML5 + Vis.js graph demo)
-│   └── main.py                    # FastAPI application entrypoint
-├── infra/
-│   └── iam/                       # Least-privilege IAM policy documents
-│       ├── ec2-instance-policy.json
-│       ├── ec2-trust-policy.json
-│       ├── github-actions-policy.json
-│       └── github-oidc-trust-policy.json
-├── scripts/
-│   ├── deploy_prod.sh             # EC2 deployment automation script
-│   ├── ec2_setup.sh               # Host setup (Docker, swap, dependencies)
-│   ├── ecr_push.sh                # Docker build & push to AWS ECR
-│   └── seed_data.py               # Dataset ingestion pipeline (S3/URL/Local)
-├── tests/
-│   ├── conftest.py                # Pytest mock fixtures
-│   ├── test_api.py                # Core API & auth test suite
-│   ├── test_cloudwatch_logging.py # CloudWatch logging test suite
-│   ├── test_deploy_script.py      # Deployment & rollback test suite
-│   ├── test_s3_ingestion.py       # S3 dataset ingestion test suite
-│   └── test_caddy_config.py       # Production proxy and Compose config checks
-├── documentation/
-│   └── aws_deployment_guide.md    # Comprehensive AWS deployment guide
-├── docker-compose.yml             # Local development stack
-├── docker-compose.prod.yml        # Hardened production stack for EC2
-├── Dockerfile                     # Multi-stage production container
-└── requirements.txt               # Locked dependencies
+├── app/                         # FastAPI application
+├── deploy/aws/legacy/           # Inactive historical AWS deployment material
+├── scripts/seed_data.py         # Dataset ingestion utility
+├── tests/                       # Automated test suite
+├── docker-compose.yml           # Local development stack
+├── docker-compose.prod.yml      # Production-like stack
+└── requirements*.txt            # Runtime, development, and optional AWS pins
 ```
 
 ---
