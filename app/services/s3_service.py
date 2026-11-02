@@ -12,9 +12,6 @@ import os
 import urllib.request
 from typing import Optional, Tuple
 
-import boto3
-from botocore.exceptions import ClientError, BotoCoreError, NoCredentialsError
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -22,7 +19,20 @@ logger = logging.getLogger(__name__)
 
 def download_from_s3(bucket: str, key: str, target_path: str, s3_client=None) -> bool:
     """Download dataset object from private S3 bucket."""
-    client = s3_client or boto3.client("s3", region_name=settings.AWS_REGION)
+    try:
+        from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
+
+        if s3_client is None:
+            import boto3
+
+            client = boto3.client("s3", region_name=settings.AWS_REGION)
+        else:
+            client = s3_client
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "S3 downloads require the optional packages in requirements-aws.txt."
+        ) from exc
+
     logger.info(f"Downloading s3://{bucket}/{key} -> {target_path}")
     try:
         os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
@@ -60,13 +70,19 @@ def ensure_dataset(
     key_name = key or settings.AWS_S3_DATASET_KEY
 
     if bucket_name:
-        success = download_from_s3(bucket_name, key_name, target_path, s3_client=s3_client)
+        success = download_from_s3(
+            bucket_name, key_name, target_path, s3_client=s3_client
+        )
         if success:
             logger.info(f"Successfully retrieved dataset from S3: {target_path}")
             return target_path, "s3"
         if require_s3:
-            raise RuntimeError(f"Required S3 download failed for s3://{bucket_name}/{key_name}")
-        logger.warning("S3 download failed. Attempting URL fallback for local development...")
+            raise RuntimeError(
+                f"Required S3 download failed for s3://{bucket_name}/{key_name}"
+            )
+        logger.warning(
+            "S3 download failed. Attempting URL fallback for local development..."
+        )
 
     # 3. Fallback URL (development path)
     if fallback_url:
