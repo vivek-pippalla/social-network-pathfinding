@@ -24,10 +24,10 @@ Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / 
 ## Current task log
 
 ### Phase 0
-- **Status:** In progress; implementation and local checks are recorded below.
+- **Status:** Implementation and local Phase 0 gates complete; independent reviewer PASS and merge remain pending.
 - **Branch and baseline:** `phase-0-baseline-cleanup`; `pre-rebuild` points to `e5fd4ea`; `main` remains unchanged.
 - **Checks:** baseline `pytest -q` 54 passed; current standard non-integration and full suites 55 passed each; Ruff and actionlint clean; pip-audit findings documented.
-- **Outstanding:** final review/commit of README, `.gitignore`, status record and compose-test correction; optional AWS pins not installed; shellcheck and Docker daemon unavailable; historical deploy script still fails `bash -n` as already recorded in C-03.
+- **Outstanding:** independent reviewer PASS and merge are pending. The optional boto3/watchtower pins were not installed per user instruction; a fresh runtime-only environment was not created; Docker daemon and ShellCheck are unavailable. The archived legacy `deploy_prod.sh` still fails `bash -n` with the known C-03 syntax error; Phase 11 replaces that script.
 
 ## Phase completion record
 
@@ -56,3 +56,5 @@ For each phase, append:
 - **Verified:** `ruff check .`; `ruff format --check .` (26 files); the standard non-integration command and full `pytest -q` (55 passed each); `actionlint` 1.7.12; `pip check`; Compose config validation and malformed-file rejection.
 - **Audit:** `pip-audit -r requirements.txt` reported three rows across python-jose and ecdsa; triage is recorded in `docs/DEPENDENCY_AUDIT.md`. The audit is not clean.
 - **Not verified:** refreshed boto3/watchtower pins were not installed, per user instruction; a fresh runtime-only environment was not created. Docker daemon is unavailable. `shellcheck` is not installed. The inactive legacy `deploy_prod.sh` retains its known syntax error (C-03), to be replaced in Phase 11.
+
+- **Closeout:** No Phase 1 work started. User-provided `docs/BUILD_PLAN.md` and `docs/AGENTS.md` remain untracked and were not added to the phase commits.
