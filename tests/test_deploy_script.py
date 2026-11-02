@@ -14,7 +14,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 SCRIPT_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "scripts", "deploy_prod.sh")
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "deploy",
+        "aws",
+        "legacy",
+        "scripts",
+        "deploy_prod.sh",
+    )
 )
 
 

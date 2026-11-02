@@ -1,3 +1,8 @@
+# Inactive legacy AWS deployment guide
+
+This guide and the deployment material in this directory are preserved as historical reference only. They have not been tested since the AWS account closed. Do not use them to deploy. This legacy material is scheduled for deletion in Phase 15.
+
+---
 # AWS Production Deployment & Architecture Guide
 
 A lean, production-grade guide for deploying the **Social Network Pathfinding Engine** to Amazon Web Services using **EC2, S3, IAM, CloudWatch, and ECR**, with automated CI/CD via **GitHub Actions and AWS OIDC federation**.
@@ -36,58 +41,58 @@ A lean, production-grade guide for deploying the **Social Network Pathfinding En
 
 ```
                                       AWS Cloud (ap-south-1)
- ┌─────────────────────────────────────────────────────────────────────────────────────────┐
- │                                                                                         │
- │   ┌──────────────────────┐              ┌───────────────────────────────────────────┐   │
- │   │      Amazon S3       │              │           Amazon CloudWatch Logs          │   │
- │   │ (Private Dataset)    │              │   (/social-network-pathfinding/app)       │   │
- │   └──────────┬───────────┘              └─────────────────────▲─────────────────────┘   │
- │              │ (IAM Auth / seed_data.py)                      │ (Structured JSON logs)  │
- │              ▼                                                │                         │
- │   ┌───────────────────────────────────────────────────────────┴─────────────────────┐   │
- │   │ Amazon EC2 (t3.medium: 2 vCPU, 4GB RAM + 2GB Swap)                              │   │
- │   │                                                                                 │   │
- │   │  Security Group: Inbound 22 (SSH Admin: MY_IP/32), Inbound 80 (HTTP), 443 (HTTPS)│  │
- │   │  IAM Instance Profile: EC2InstanceRole                                          │   │
- │   │  Environment: /opt/social-network-pathfinding/.env.prod (chmod 600, not in Git) │   │
- │   │                                                                                 │   │
- │   │   ┌─────────────────────────────────────────────────────────────────────────┐   │   │
- │   │   │ Docker Network: internal-network (Bridge)                               │   │   │
- │   │   │                                                                         │   │   │
- │   │   │   ┌───────────────────────────┐                                         │   │   │
- │   │   │   │ Caddy 2.8 Reverse Proxy   │ (Host: 80, 443 -> Auto Let's Encrypt)   │   │   │
- │   │   │   │ (social-network-caddy)    │ (Auto HTTP->HTTPS 308 redirect)         │   │   │
- │   │   │   └─────────────┬─────────────┘                                         │   │   │
- │   │   │                 │ (Internal HTTP proxy to api:5000)                     │   │   │
- │   │   │                 ▼                                                       │   │   │
- │   │   │   ┌───────────────────────────┐      ┌───────────────────────────────┐  │   │   │
- │   │   │   │ FastAPI App (Internal)    │─────▶│      Redis 7 Cache (LRU)      │  │   │   │
- │   │   │   │ (Port 5000 Unpublished)   │      │      (Internal port 6379)     │  │   │   │
- │   │   │   └─────────────┬─────────────┘      │      (Unpublished to Host)    │  │   │   │
- │   │   │                 │                    └───────────────────────────────┘  │   │   │
- │   │   │                 ▼                                                       │   │   │
- │   │   │   ┌───────────────────────────┐                                         │   │   │
- │   │   │   │ Neo4j 5.12 Graph DB       │                                         │   │   │
- │   │   │   │ (Internal 7687, 7474)     │                                         │   │   │
- │   │   │   │ (Unpublished to Host)     │                                         │   │   │
- │   │   │   └───────────────────────────┘                                         │   │   │
- │   │   └─────────────────────────────────────────────────────────────────────────┘   │   │
- │   └─────────────────────────────────────────▲───────────────────────────────────────┘   │
- │                                             │                                           │
- │   ┌──────────────────────┐                  │ (ecr pull via Instance Role)              │
- │   │      Amazon ECR      │──────────────────┘                                           │
- │   │ (social-network-api) │                                                              │
- │   └──────────▲───────────┘                                                              │
- │              │ (docker push via OIDC)                                                   │
- └──────────────┼──────────────────────────────────────────────────────────────────────────┘
-                │
- ┌──────────────┴──────────────────────────────────────────────────────────────────────────┐
- │ GitHub Actions (CI/CD)                                                                  │
- │ - Trigger: Push to main                                                                 │
- │ - Authentication: AWS STS AssumeRoleWithWebIdentity (Keyless OIDC token)                 │
- │ - Verification: Strictly requires pinned EC2_SSH_KNOWN_HOSTS (no dynamic TOFU)         │
- │ - Jobs: Run 54 Pytest Unit Tests -> Build Docker Image -> Push to ECR -> SSH Deploy    │
- └─────────────────────────────────────────────────────────────────────────────────────────┘
+ â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+ â”‚                                                                                         â”‚
+ â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+ â”‚   â”‚      Amazon S3       â”‚              â”‚           Amazon CloudWatch Logs          â”‚   â”‚
+ â”‚   â”‚ (Private Dataset)    â”‚              â”‚   (/social-network-pathfinding/app)       â”‚   â”‚
+ â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–²â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
+ â”‚              â”‚ (IAM Auth / seed_data.py)                      â”‚ (Structured JSON logs)  â”‚
+ â”‚              â–¼                                                â”‚                         â”‚
+ â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+ â”‚   â”‚ Amazon EC2 (t3.medium: 2 vCPU, 4GB RAM + 2GB Swap)                              â”‚   â”‚
+ â”‚   â”‚                                                                                 â”‚   â”‚
+ â”‚   â”‚  Security Group: Inbound 22 (SSH Admin: MY_IP/32), Inbound 80 (HTTP), 443 (HTTPS)â”‚  â”‚
+ â”‚   â”‚  IAM Instance Profile: EC2InstanceRole                                          â”‚   â”‚
+ â”‚   â”‚  Environment: /opt/social-network-pathfinding/.env.prod (chmod 600, not in Git) â”‚   â”‚
+ â”‚   â”‚                                                                                 â”‚   â”‚
+ â”‚   â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚   â”‚
+ â”‚   â”‚   â”‚ Docker Network: internal-network (Bridge)                               â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚                                                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ Caddy 2.8 Reverse Proxy   â”‚ (Host: 80, 443 -> Auto Let's Encrypt)   â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ (social-network-caddy)    â”‚ (Auto HTTP->HTTPS 308 redirect)         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚                 â”‚ (Internal HTTP proxy to api:5000)                     â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚                 â–¼                                                       â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”      â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ FastAPI App (Internal)    â”‚â”€â”€â”€â”€â”€â–¶â”‚      Redis 7 Cache (LRU)      â”‚  â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ (Port 5000 Unpublished)   â”‚      â”‚      (Internal port 6379)     â”‚  â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜      â”‚      (Unpublished to Host)    â”‚  â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚                 â”‚                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚                 â–¼                                                       â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ Neo4j 5.12 Graph DB       â”‚                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ (Internal 7687, 7474)     â”‚                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â”‚ (Unpublished to Host)     â”‚                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                         â”‚   â”‚   â”‚
+ â”‚   â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚   â”‚
+ â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–²â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
+ â”‚                                             â”‚                                           â”‚
+ â”‚   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                  â”‚ (ecr pull via Instance Role)              â”‚
+ â”‚   â”‚      Amazon ECR      â”‚â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                           â”‚
+ â”‚   â”‚ (social-network-api) â”‚                                                              â”‚
+ â”‚   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–²â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                                              â”‚
+ â”‚              â”‚ (docker push via OIDC)                                                   â”‚
+ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                â”‚
+ â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+ â”‚ GitHub Actions (CI/CD)                                                                  â”‚
+ â”‚ - Trigger: Push to main                                                                 â”‚
+ â”‚ - Authentication: AWS STS AssumeRoleWithWebIdentity (Keyless OIDC token)                 â”‚
+ â”‚ - Verification: Strictly requires pinned EC2_SSH_KNOWN_HOSTS (no dynamic TOFU)         â”‚
+ â”‚ - Jobs: Run 54 Pytest Unit Tests -> Build Docker Image -> Push to ECR -> SSH Deploy    â”‚
+ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
@@ -154,24 +159,24 @@ For this single-host EC2 architecture, production credentials (`NEO4J_PASSWORD` 
 
 ### Ingress Architecture: Caddy Reverse Proxy & Automatic HTTPS ($0 Extra Cost)
 
-To provide production-grade TLS encryption and automatic certificate management without incurring recurring AWS Application Load Balancer fees ($18–$22/month), the stack deploys **Caddy 2.8** as a reverse proxy container alongside FastAPI:
+To provide production-grade TLS encryption and automatic certificate management without incurring recurring AWS Application Load Balancer fees ($18â€“$22/month), the stack deploys **Caddy 2.8** as a reverse proxy container alongside FastAPI:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Public Internet                                                                                 │
-│                                                                                                 │
-│  HTTP Request (Port 80)  ──▶ [Caddy Reverse Proxy] ──▶ HTTP 308 Redirect (Force HTTPS)          │
-│                                      │                                                          │
-│  HTTPS Request (Port 443) ─▶ [Caddy Reverse Proxy]                                              │
-│                                      │                                                          │
-│                           Terminates TLS (Let's Encrypt / ZeroSSL)                              │
-│                           Injects HSTS, nosniff, frame protection headers                       │
-│                                      │                                                          │
-│                                      ▼ (Internal Bridge Network: internal-network)              │
-│                               ┌──────────────┐                                                  │
-│                               │ FastAPI App  │ (Listens on port 5000, UNMAPPED to Host)         │
-│                               └──────────────┘                                                  │
-└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ Public Internet                                                                                 â”‚
+â”‚                                                                                                 â”‚
+â”‚  HTTP Request (Port 80)  â”€â”€â–¶ [Caddy Reverse Proxy] â”€â”€â–¶ HTTP 308 Redirect (Force HTTPS)          â”‚
+â”‚                                      â”‚                                                          â”‚
+â”‚  HTTPS Request (Port 443) â”€â–¶ [Caddy Reverse Proxy]                                              â”‚
+â”‚                                      â”‚                                                          â”‚
+â”‚                           Terminates TLS (Let's Encrypt / ZeroSSL)                              â”‚
+â”‚                           Injects HSTS, nosniff, frame protection headers                       â”‚
+â”‚                                      â”‚                                                          â”‚
+â”‚                                      â–¼ (Internal Bridge Network: internal-network)              â”‚
+â”‚                               â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                                                  â”‚
+â”‚                               â”‚ FastAPI App  â”‚ (Listens on port 5000, UNMAPPED to Host)         â”‚
+â”‚                               â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                                                  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 #### Key Capabilities of the Caddy Reverse Proxy:
@@ -277,7 +282,7 @@ Running Neo4j 5.12 (JVM), Redis 7 (In-Memory), and FastAPI (Asynchronous Python)
 
 | Component | Minimum RAM | Recommended RAM | Rationale |
 |---|---|---|---|
-| **Neo4j 5.12** | 1.5 GB | 2.0 GB | Heap: 512 MB – 1.0 GB; Pagecache: 512 MB for graph traversals. |
+| **Neo4j 5.12** | 1.5 GB | 2.0 GB | Heap: 512 MB â€“ 1.0 GB; Pagecache: 512 MB for graph traversals. |
 | **Redis 7** | 128 MB | 256 MB | Configured with `maxmemory 256mb` and `allkeys-lru` eviction policy. |
 | **FastAPI + Uvicorn** | 150 MB | 256 MB | Python 3.11 with 4 Uvicorn workers and connection pool. |
 | **OS + Docker Daemon** | 300 MB | 500 MB | Ubuntu Linux baseline, logging, and system daemons. |
