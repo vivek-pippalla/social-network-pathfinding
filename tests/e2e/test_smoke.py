@@ -1,5 +1,6 @@
 import os
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -32,6 +33,7 @@ def test_register_search_add_friend_and_find_named_path():
     with playwright.sync_playwright() as playwright_context:
         browser = playwright_context.chromium.launch()
         page = browser.new_page()
+        page.context.tracing.start(screenshots=True, snapshots=True, sources=True)
         try:
             _register(page, hostile_name, email_a, password)
             expect(page.locator("#welcome-name")).to_have_text(hostile_name)
@@ -76,5 +78,11 @@ def test_register_search_add_friend_and_find_named_path():
             )
             expect(page.locator("#path-result")).to_contain_text(hostile_name)
             assert page.locator("#path-result img").count() == 0
+        except Exception:
+            Path("test-results").mkdir(exist_ok=True)
+            page.context.tracing.stop(path="test-results/playwright-trace.zip")
+            raise
+        else:
+            page.context.tracing.stop()
         finally:
             browser.close()

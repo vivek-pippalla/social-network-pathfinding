@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-11-docker-local-deployment (stacked on Phase 10 commit 6c6b82f; main unchanged)
+- **Working branch:** phase-12-ci-cd (stacked on Phase 11 commit d8829df; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 11 — Docker and local deployment
+- **Current phase:** Phase 12 — CI/CD
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-04
 
@@ -25,7 +25,8 @@
 | Phase 8: API completion and contract | Implemented and committed | Commit cf8c32f on phase-8-api-completion; API contract and local checks recorded below |
 | Phase 9: Frontend reconstruction | Implemented and committed | Commit 9c9ab34 on phase-9-frontend-reconstruction; browser E2E and real-service verification remain deferred |
 | Phase 10: Observability | Implemented and committed | Commit 6c6b82f on `phase-10-observability`; local tests passed, live monitoring and real-service checks remain unverified |
-| Phase 11: Docker and local deployment | Implemented locally; pending review | Branch `phase-11-docker-local-deployment`, stacked on Phase 10 commit 6c6b82f; live Docker checks remain unverified |
+| Phase 11: Docker and local deployment | Implemented and committed; live verification deferred | Commit d8829df on `phase-11-docker-local-deployment`; live Docker checks remain unverified |
+| Phase 12: CI/CD | In progress | Branch `phase-12-ci-cd`, stacked on Phase 11 commit d8829df |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -140,3 +141,11 @@ For each phase, append:
 - **Neo4j pin decision:** Existing `neo4j:5.12.0` is retained pending approval. Neo4j's release archive lists `5.26.32` (9 October 2026) as the latest 5.x candidate. A Neo4j version change is not made in this phase without explicit approval; back up and test restore before changing it.
 - **Unverified:** `docker info` returned permission denied for `npipe:////./pipe/docker_engine`; no image build, service start, SNAP ingestion, health request, UI login, or backup/restore drill was run. `bash -n` and the behavioral deploy cases skipped because Windows `bash.exe` could not run; `shellcheck` is not installed. The command syntax is linked to the official current Neo4j manual, but the exact behavior against pinned image `5.12.0` was not verified. Playwright/browser and real Neo4j/Redis acceptance checks remain unverified.
 - **Clean-machine commands:** In a fresh clone only, copy `.env.example` to `.env`; generate a 32-byte hex `SECRET_KEY` and independent 24-byte hex `NEO4J_PASSWORD` and `REDIS_PASSWORD` values with `openssl rand -hex 32` / `openssl rand -hex 24`, then replace the placeholders. Run `docker compose config -q`, `docker compose up -d --build`, `docker compose run --rm api python -m app.cli ingest`, and `curl --fail http://127.0.0.1:5000/health/ready`; complete the UI login journey at `http://127.0.0.1:5000/`. Run `bash deploy/local/backup.sh`, then restore only from a dump that may safely replace the current graph with `bash deploy/local/restore.sh <dump-path>` and type the exact confirmation requested. Do not copy over an existing `.env` or use a volume-removal command. The active `.env` and any Docker volumes were not modified here.
+
+### Phase 12
+- **Status:** Implementation complete locally on `phase-12-ci-cd`, stacked on Phase 11 commit `d8829df`; uncommitted pending review.
+- **Implemented:** CI split into lint, unit/coverage, real-service integration, contract, Compose/Playwright E2E, security and no-push image-build jobs; service/repository coverage regression gate; full-SHA action pin policy; failure-only test and Playwright trace artifacts; optional manual OIDC S3 packaging workflow with packaging concurrency, Step Summary provenance, and gated by `AWS_DEMO_ENABLED=true`; local workflow contract checks and a detect-secrets baseline.
+- **Coverage baseline:** Captured with Python 3.11.14 and `pytest -q -m "not integration and not e2e"`: services 85.44% (358/419 statements), repositories 41.78% (61/146 statements). The CI gate rejects a decrease in either group and does not impose a new coverage target.
+- **Branch protection recommendation:** Require `lint`, `unit`, `integration`, `contract`, `e2e`, `security`, and `image` on `main`; do not require the optional AWS packaging workflow.
+- **Local checks:** `ruff check app tests scripts benchmarks optional_integrations` passed; Ruff format check passed for 68 Python files; `pytest -q -m "not integration and not e2e"` passed (163 passed, 9 skipped, 36 deselected); the coverage gate passed at the recorded 85.44% services / 41.78% repositories baseline; `scripts/export_openapi.py --check` passed; `pip-audit -r requirements.txt` passed with no known vulnerabilities; actionlint 1.7.12 passed on both workflows; detect-secrets hook passed against tracked and new Phase 12 paths; `git diff --check` passed. A deliberate failing pytest and a fake AWS-key scan both returned nonzero on a disposable local branch; that branch and scratch files were removed.
+- **Unverified:** GitHub Actions jobs and PR execution require the Phase 12 review/commit and remote branch publication. Docker engine access remains unavailable under the existing environment restriction; therefore CI E2E, integration-service and image-build jobs were not run locally. ShellCheck is not installed locally; GitHub-hosted lint job invokes it for active scripts. The optional AWS packaging workflow is intentionally gated off and remains unverified beyond actionlint and static tests.
