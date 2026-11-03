@@ -49,6 +49,18 @@ def test_health_check_is_live_without_dependencies():
     assert response.json() == {"status": "ok"}
 
 
+def test_content_security_policy_and_security_headers_are_set():
+    response = client.get("/health")
+    policy = response.headers["content-security-policy"]
+    assert "default-src 'self'" in policy
+    assert "script-src 'self'" in policy
+    assert "style-src 'self' 'unsafe-inline'" in policy
+    assert "connect-src 'self'" in policy
+    assert "frame-ancestors 'none'" in policy
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+
+
 def test_removed_user_creation_and_arbitrary_connections_routes():
     assert client.post("/api/v1/users/", json={}).status_code in {404, 405}
     assert client.post(
