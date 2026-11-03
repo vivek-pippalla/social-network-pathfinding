@@ -26,7 +26,11 @@ import app.services.s3_service
 import scripts.seed_data
 
 from fastapi.testclient import TestClient
-app = main.create_app(driver_provider=lambda: object(), driver_closer=lambda: None)
+app = main.create_app(
+    driver_provider=lambda: object(),
+    driver_closer=lambda: None,
+    schema_bootstrapper=lambda _driver: None,
+)
 with TestClient(app) as client:
     assert client.get('/health').status_code == 200
 """

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     NEGATIVE_CACHE_TTL_SECONDS: int = 60
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     ENABLE_DOCS: bool = True
+    AUTO_SCHEMA: bool = True
     ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # Kept temporarily because the existing AWS/ingestion code still imports these.

@@ -24,6 +24,7 @@ def make_settings(**overrides):
         "APP_ENV": "test",
         "SECRET_KEY": TEST_SECRET,
         "NEO4J_PASSWORD": "unit-test-neo4j-password",
+        "AUTO_SCHEMA": False,
     }
     values.update(overrides)
     return Settings(**values)
@@ -283,6 +284,33 @@ def test_liveness_has_no_dependency_access_and_readiness_dependency_status():
     assert failed.status_code == 503
     assert failed.json()["error"]["code"] == "UNAVAILABLE"
     assert "private connection details" not in failed.text
+
+
+def test_lifespan_bootstraps_schema_only_when_enabled():
+    calls = []
+    driver = object()
+    app = create_app(
+        make_settings(AUTO_SCHEMA=True),
+        driver_provider=lambda: driver,
+        redis_provider=lambda: None,
+        driver_closer=lambda: None,
+        schema_bootstrapper=lambda actual_driver: calls.append(actual_driver),
+    )
+    with TestClient(app):
+        pass
+    assert calls == [driver]
+
+    calls.clear()
+    disabled = create_app(
+        make_settings(AUTO_SCHEMA=False),
+        driver_provider=lambda: driver,
+        redis_provider=lambda: None,
+        driver_closer=lambda: None,
+        schema_bootstrapper=lambda actual_driver: calls.append(actual_driver),
+    )
+    with TestClient(disabled):
+        pass
+    assert calls == []
 
 
 def test_docs_and_cors_toggles():

@@ -17,6 +17,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import request_id_var, setup_logging
 from app.db.neo4j_db import close_driver, get_driver
 from app.db.redis_cache import get_client
+from app.db.schema import ensure_schema
 from app.domain.errors import UnavailableError
 
 logger = logging.getLogger("app.access")
@@ -30,6 +31,7 @@ def create_app(
     driver_provider=get_driver,
     redis_provider=get_client,
     driver_closer=close_driver,
+    schema_bootstrapper=ensure_schema,
 ) -> FastAPI:
     config = settings or get_settings()
     setup_logging()
@@ -37,7 +39,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         try:
-            driver_provider()
+            driver = driver_provider()
+            if config.AUTO_SCHEMA:
+                schema_bootstrapper(driver)
             yield
         finally:
             driver_closer()

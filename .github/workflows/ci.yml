@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "phase-*"]
   pull_request:
     branches: [main]
 
@@ -24,4 +24,47 @@ jobs:
       - name: Check formatting
         run: ruff format --check .
       - name: Run tests
-        run: pytest -q
+        run: pytest -q -m "not integration and not e2e"
+
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: test
+      SECRET_KEY: test-only-secret-key-32-bytes-minimum
+      NEO4J_PASSWORD: integration-test-password
+      TEST_NEO4J_URI: bolt://localhost:17687
+      TEST_NEO4J_USER: neo4j
+      TEST_NEO4J_PASSWORD: integration-test-password
+      TEST_REDIS_URL: redis://localhost:16379/15
+      REQUIRE_INTEGRATION: "1"
+    services:
+      neo4j:
+        image: neo4j:5.12.0
+        env:
+          NEO4J_AUTH: neo4j/integration-test-password
+        ports:
+          - 17687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p integration-test-password 'RETURN 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 30s
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 16379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project and development requirements
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run required integration tests
+        run: pytest -q -m integration

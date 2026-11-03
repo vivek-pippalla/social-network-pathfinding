@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-1-application-foundation (stacked from Phase 0; main unchanged)
+- **Working branch:** phase-2-graph-schema-test-harness (stacked from Phase 1; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 1 — application foundation
+- **Current phase:** Phase 2 — graph schema and real-infrastructure test harness
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-02
 
@@ -16,8 +16,8 @@
 |---|---|---|
 | Phase 0: baseline, cleanup, dependency refresh | Complete locally; final review pending | Pushed branch remains unmerged by plan; final integrated review and merge are deferred until all phases are complete |
 | Phase 1: Application foundation | Complete locally; awaiting user review | Stacked from Phase 0; local acceptance checks recorded below; no commit created |
-| Phase 2: Engineering hardening | Not started | Update only after running acceptance checks |
-| Phase 3: Optional deployment / AWS work | Deferred / optional | Not required for local rebuild; start only with explicit user approval |
+| Phase 2: Graph schema and real-infrastructure test harness | Implementation complete; integration verification deferred | User directed deferral until environment setup is complete |
+| Phase 3: Authentication and authorisation | Not started | Begin only after Phase 2 is committed and reviewed |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -65,3 +65,9 @@ For each phase, append:
 - **Checks:** `ruff check .` passed; `ruff format --check .` reported 28 files already formatted; standard non-integration suite 74 passed; full `pytest -q` 74 passed. `pip-audit -r requirements.txt --no-deps` reported three advisory rows across `python-jose` and `ecdsa`; dependency replacement remains scheduled for Phase 3. No Phase 1 integration or browser tests were defined or run.
 - **Implemented:** Fail-fast settings and cached accessor; app factory; uniform sanitized error envelope; request-ID middleware and JSON access logging; liveness/readiness routes; conditional CORS and docs; corrected API description; CloudWatch handler moved to `optional_integrations/`; `.env.example` uses invalid placeholders; compatibility tests updated.
 - **Known unverified:** No live Neo4j/Redis readiness check was run; health dependency behavior was tested with fakes. No real server/container startup was performed. The current `.env` lacks `SECRET_KEY`, so app startup correctly refuses until a private value is configured.
+
+### Phase 2
+- **Status:** Implementation complete on phase-2-graph-schema-test-harness, stacked from Phase 1 commit 97e6aff; real-service verification deferred by user until environment setup is complete.
+- **Implemented:** Schema bootstrap, AUTO_SCHEMA lifespan hook, isolated test Compose stack and helper, real-service pytest fixtures/tests, and CI integration job.
+- **Checks previously run:** Ruff check/format passed; 75 non-integration tests passed; full suite 75 passed and 5 integration tests skipped. Integration tests were not verified against live services. Docker/Bash access errors are documented; do not retry in this phase.
+- **Known:** Real Neo4j and Redis behavior remains unverified until environment setup is complete.
