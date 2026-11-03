@@ -4,27 +4,36 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from neo4j.exceptions import Neo4jError
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api import routes_auth, routes_friends, routes_graph, routes_users
 from app.api.errors import install_exception_handlers
+from app.api.openapi import route_errors
+from app.api.request_size import RequestBodyLimitMiddleware
+from app.api.deps import get_current_user
 from app.core.config import Settings, get_settings
 from app.core.logging import request_id_var, setup_logging
 from app.db.neo4j_db import close_driver, get_driver
 from app.db.redis_cache import get_client
 from app.db.schema import ensure_schema
 from app.domain.errors import UnavailableError
+from app.models.schemas import HealthResponse, ReadinessResponse
 from app.services.cache_service import CacheService
 from app.services.friend_service import FriendService
 
 logger = logging.getLogger("app.access")
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-DESCRIPTION = "Social graph API for user profiles, friendship connections, pathfinding, and friend recommendations."
+DESCRIPTION = (
+    "Social graph API for user profiles, friendship connections, pathfinding, and "
+    "friend recommendations. Request bodies are limited by MAX_REQUEST_BODY_BYTES "
+    "(1 MiB by default)."
+)
 
 
 def create_app(
@@ -59,6 +68,7 @@ def create_app(
     )
     application.state.driver_provider = driver_provider
     application.state.redis_provider = redis_provider
+    application.state.settings = config
     cache_service = CacheService(
         redis_provider,
         positive_ttl=config.CACHE_TTL_SECONDS,
@@ -69,6 +79,12 @@ def create_app(
         on_graph_changed=cache_service.bump_version
     )
     install_exception_handlers(application)
+
+    # Install before the request-context middleware below so rejections still receive
+    # an access log and request ID from that outer middleware.
+    application.add_middleware(
+        RequestBodyLimitMiddleware, max_bytes=config.MAX_REQUEST_BODY_BYTES
+    )
 
     @application.middleware("http")
     async def request_context(request: Request, call_next):
@@ -114,20 +130,41 @@ def create_app(
     application.include_router(routes_users.router)
     application.include_router(routes_friends.router)
     application.mount("/static", StaticFiles(directory="app/static"), name="static")
-    Instrumentator().instrument(application).expose(
-        application, include_in_schema=False
+    instrumentator = Instrumentator().instrument(application)
+
+    @application.get(
+        "/metrics",
+        include_in_schema=False,
+        dependencies=[Depends(get_current_user)],
     )
+    async def metrics():
+        return Response(
+            content=generate_latest(instrumentator.registry),
+            media_type=CONTENT_TYPE_LATEST,
+        )
 
     @application.get("/", include_in_schema=False)
     async def root():
         return RedirectResponse(url="/static/index.html")
 
-    @application.get("/health", tags=["Health"], summary="Liveness check")
+    @application.get(
+        "/health",
+        response_model=HealthResponse,
+        tags=["Health"],
+        summary="Liveness check",
+        operation_id="getHealth",
+        responses=route_errors(),
+    )
     async def health_check():
         return {"status": "ok"}
 
     @application.get(
-        "/health/ready", tags=["Health"], summary="Dependency readiness check"
+        "/health/ready",
+        response_model=ReadinessResponse,
+        tags=["Health"],
+        summary="Dependency readiness check",
+        operation_id="getReadiness",
+        responses=route_errors("UNAVAILABLE"),
     )
     async def readiness_check(request: Request):
         try:

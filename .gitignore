@@ -33,3 +33,5 @@ Thumbs.db
 documentation/*
 
 docs/*
+!docs/API.md
+!docs/openapi.json

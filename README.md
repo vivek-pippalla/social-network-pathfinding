@@ -34,7 +34,7 @@ Built with **FastAPI**, **Neo4j**, and **Redis**, backed by the real-world [Stan
 
 ## Overview
 
-Given two user IDs, the engine computes a bounded shortest path through the social graph using Neo4j's built-in `shortestPath()`. Path caching and its performance have not yet been implemented or measured; Redis path caching is planned for Phase 6.
+Given two user IDs, the engine computes a bounded shortest path through the social graph using Neo4j's built-in `shortestPath()`. Results use a versioned Redis cache; latency has not been benchmarked against a live stack.
 
 The system also provides **"People You May Know"** recommendations — ranking friend-of-friend suggestions by mutual friend count using the Triadic Closure algorithm — available through an authenticated endpoint for any user and a personalized `/me` endpoint derived from your JWT token.
 
@@ -45,7 +45,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
 | Domain | Feature | Description |
 |---|---|---|
 | **Graph Algorithm** | **Shortest Path** | Bidirectional BFS with hop counts between any two nodes in <150 ms |
-| **Caching** | **Planned for Phase 6** | Redis cache-aside with graph-version invalidation; not implemented yet |
+| **Caching** | **Versioned Redis path cache** | Canonical path keys with graph-version invalidation and short negative caching |
 | **Recommendations** | **Friend Suggestions** | Triadic closure ranking friends-of-friends by mutual connections |
 | **Dataset** | **SNAP Graph Ingestion** | Checksum-verified download, validated parsing, additive Neo4j batches |
 | **Security & Config** | **Host Secret Isolation** | Protected `.env.prod` (chmod 600) outside Git; unexposed internal database ports |

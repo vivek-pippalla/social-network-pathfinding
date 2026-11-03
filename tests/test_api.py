@@ -177,7 +177,8 @@ def test_search_is_protected_and_uses_public_projection(authenticated_client):
     with patch("app.api.routes_users.user_service.search_users", return_value=users):
         response = authenticated_client.get("/api/v1/users/search?q=fr")
     assert response.status_code == 200
-    assert response.json() == users
+    assert response.json()["items"] == users
+    assert response.json()["total"] is None
     assert "email" not in response.text
     assert "password_hash" not in response.text
 
@@ -328,7 +329,7 @@ def test_suggestions_routes_use_paged_recommendation_service(authenticated_clien
             "/api/v1/users/target/suggestions?limit=5&offset=2"
         )
     assert response.status_code == 200
-    assert response.json()["suggestions"][0]["name"] == "Friend"
+    assert response.json()["items"][0]["name"] == "Friend"
     assert response.json()["limit"] == 5
     assert other.status_code == 200
     assert get_suggestions.call_args_list == [
@@ -363,8 +364,9 @@ def test_friend_endpoints_are_versioned_authenticated_and_validate_ids(
             "remove_friend",
             return_value={"removed": False},
         ) as remove_friend,
-        patch.object(app.state.friend_service, "mutual_friends", return_value=[])
-        as mutual_friends,
+        patch.object(
+            app.state.friend_service, "mutual_friends", return_value=[]
+        ) as mutual_friends,
     ):
         friends = authenticated_client.get("/api/v1/friends?limit=1&offset=0")
         removed = authenticated_client.delete("/api/v1/friends/friend")

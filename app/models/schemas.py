@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Generic, Literal, Optional, TypeVar
 
 from pydantic import (
     BaseModel,
@@ -18,9 +18,28 @@ class PublicUserResponse(BaseModel):
     name: str
     source: str = "snap"
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"id": "42", "name": "User_42", "source": "snap"}]
+        }
+    )
+
 
 class OwnProfileResponse(PublicUserResponse):
     email: EmailStr
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": "3d4c8a3f5e6b7c8d9a0b1c2d3e4f5a6b",
+                    "name": "Ada",
+                    "source": "app",
+                    "email": "ada@example.test",
+                }
+            ]
+        }
+    )
 
 
 # ─── Connection ──────────────────────────────────────────────────────────────
@@ -33,21 +52,40 @@ class ConnectionResponse(BaseModel):
 class FriendCreatedResponse(BaseModel):
     created: bool
 
+    model_config = ConfigDict(json_schema_extra={"examples": [{"created": True}]})
+
 
 class FriendRemovedResponse(BaseModel):
     removed: bool
 
+    model_config = ConfigDict(json_schema_extra={"examples": [{"removed": True}]})
 
-class FriendsPage(BaseModel):
-    items: list[PublicUserResponse]
+
+ItemT = TypeVar("ItemT")
+
+
+class PaginationPage(BaseModel, Generic[ItemT]):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "items": [{"id": "42", "name": "User_42", "source": "snap"}],
+                    "limit": 20,
+                    "offset": 0,
+                    "total": None,
+                }
+            ]
+        }
+    )
+
+    items: list[ItemT]
     limit: int
     offset: int
+    total: int | None = None
 
 
-class MutualFriendsPage(BaseModel):
-    items: list[PublicUserResponse]
-    limit: int
-    offset: int
+FriendsPage = PaginationPage[PublicUserResponse]
+MutualFriendsPage = PaginationPage[PublicUserResponse]
 
 
 # ─── Pathfinding ─────────────────────────────────────────────────────────────
@@ -65,6 +103,24 @@ class PathResponse(BaseModel):
     hops: int
     cached: bool
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "start_user": "1",
+                    "end_user": "9",
+                    "path": [
+                        {"id": "1", "name": "User_1"},
+                        {"id": "4", "name": "User_4"},
+                        {"id": "9", "name": "User_9"},
+                    ],
+                    "hops": 2,
+                    "cached": False,
+                }
+            ]
+        }
+    )
+
 
 # ─── Suggestions ─────────────────────────────────────────────────────────────
 
@@ -75,17 +131,75 @@ class SuggestedUser(BaseModel):
     mutual_friends: int
 
 
-class SuggestionResponse(BaseModel):
-    user_id: str
-    suggestions: list[SuggestedUser]
-    limit: int
-    offset: int
+class SuggestionResponse(PaginationPage[SuggestedUser]):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "items": [
+                        {
+                            "user_id": "candidate-1",
+                            "name": "Morgan",
+                            "mutual_friends": 3,
+                        }
+                    ],
+                    "limit": 20,
+                    "offset": 0,
+                    "total": None,
+                }
+            ]
+        }
+    )
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"status": "ok"}]})
+
+
+class ReadinessResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+    components: dict[str, Literal["ok", "degraded"]]
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "ok",
+                    "components": {"neo4j": "ok", "redis": "degraded"},
+                }
+            ]
+        }
+    )
+
+
+class ErrorObject(BaseModel):
+    code: str
+    message: str
+    request_id: str
+    details: list[dict] = Field(default_factory=list)
+
+
+class ErrorEnvelope(BaseModel):
+    error: ErrorObject
 
 
 # ─── Authentication ──────────────────────────────────────────────────────────
 
 
 class UserRegister(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "Ada",
+                    "email": "ada@example.test",
+                    "password": "a-long-demo-password",
+                }
+            ]
+        }
+    )
+
     name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
@@ -106,7 +220,9 @@ class UserRegister(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"examples": [{"name": "Ada Lovelace"}]}
+    )
 
     name: str = Field(min_length=1, max_length=100)
 
@@ -120,6 +236,18 @@ class Token(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJIUzI1NiJ9.example.signature",
+                    "token_type": "bearer",
+                    "expires_in": 1800,
+                }
+            ]
+        }
+    )
 
 
 UserResponse = PublicUserResponse

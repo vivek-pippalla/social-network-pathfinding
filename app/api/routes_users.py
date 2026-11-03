@@ -3,9 +3,15 @@ from neo4j import Driver
 from redis import Redis
 
 from app.api.deps import get_current_user
+from app.api.openapi import route_errors
 from app.db.neo4j_db import get_driver
 from app.db.redis_cache import get_client
-from app.models.schemas import OwnProfileResponse, ProfileUpdate, PublicUserResponse
+from app.models.schemas import (
+    OwnProfileResponse,
+    PaginationPage,
+    ProfileUpdate,
+    PublicUserResponse,
+)
 from app.services import auth_service
 from app.services import user_service
 
@@ -14,7 +20,11 @@ USER_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
 
 @router.get(
-    "/search", response_model=list[PublicUserResponse], summary="Search users by name"
+    "/search",
+    response_model=PaginationPage[PublicUserResponse],
+    summary="Search users by name",
+    operation_id="searchUsers",
+    responses=route_errors("RATE_LIMITED", protected=True),
 )
 def search_users(
     request: Request,
@@ -30,10 +40,17 @@ def search_users(
     auth_service.check_search_limit(
         redis_client, request.client.host if request and request.client else "unknown"
     )
-    return user_service.search_users(driver, q, offset=offset, limit=limit)
+    items = user_service.search_users(driver, q, offset=offset, limit=limit)
+    return {"items": items, "limit": limit, "offset": offset, "total": None}
 
 
-@router.get("/me", response_model=OwnProfileResponse, summary="Get your own profile")
+@router.get(
+    "/me",
+    response_model=OwnProfileResponse,
+    summary="Get your own profile",
+    operation_id="getOwnProfile",
+    responses=route_errors("USER_NOT_FOUND", protected=True),
+)
 def get_my_profile(
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
@@ -41,7 +58,13 @@ def get_my_profile(
     return user_service.get_own_profile(driver, current_user["user_id"])
 
 
-@router.put("/me", response_model=OwnProfileResponse, summary="Update your name")
+@router.put(
+    "/me",
+    response_model=OwnProfileResponse,
+    summary="Update your name",
+    operation_id="updateOwnProfile",
+    responses=route_errors("USER_NOT_FOUND", protected=True),
+)
 def update_my_profile(
     updates: ProfileUpdate,
     driver: Driver = Depends(get_driver),
@@ -53,11 +76,15 @@ def update_my_profile(
 
 
 @router.get(
-    "/{user_id}", response_model=PublicUserResponse, summary="Get public user profile"
+    "/{id}",
+    response_model=PublicUserResponse,
+    summary="Get public user profile",
+    operation_id="getPublicProfile",
+    responses=route_errors("USER_NOT_FOUND", protected=True),
 )
 def get_user(
-    user_id: str = Path(..., pattern=USER_ID_PATTERN),
+    id: str = Path(..., pattern=USER_ID_PATTERN),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
 ):
-    return user_service.get_user(driver, user_id)
+    return user_service.get_user(driver, id)

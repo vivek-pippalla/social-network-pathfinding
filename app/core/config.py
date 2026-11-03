@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 300
     NEGATIVE_CACHE_TTL_SECONDS: int = 60
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    MAX_REQUEST_BODY_BYTES: int = Field(default=1_048_576, ge=1, le=16_777_216)
     ENABLE_DOCS: bool = True
     AUTO_SCHEMA: bool = True
     ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)

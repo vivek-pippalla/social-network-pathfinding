@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from neo4j import Driver
 from redis import Redis
 
+from app.api.openapi import route_errors
 from app.db.redis_cache import get_client
 from app.db.neo4j_db import get_driver
 from app.models.schemas import Token, UserRegister
@@ -17,6 +18,11 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     status_code=201,
     summary="Register a new user account",
     description="Create a user and private account, then return a 30-minute access token.",
+    operation_id="registerAccount",
+    responses={
+        201: {"description": "Account created and access token issued."},
+        **route_errors("EMAIL_TAKEN", "RATE_LIMITED"),
+    },
 )
 def register(
     user: UserRegister,
@@ -42,6 +48,11 @@ def register(
         "Standard OAuth2 password flow. Submit **email** as `username` and your password. "
         "The Swagger UI 'Authorize' button uses this endpoint automatically."
     ),
+    operation_id="createAccessToken",
+    responses={
+        200: {"description": "Access token issued."},
+        **route_errors("RATE_LIMITED", "UNAUTHENTICATED"),
+    },
 )
 def login(
     request: Request,

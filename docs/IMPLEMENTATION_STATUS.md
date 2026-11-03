@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-6-redis-caching-invalidation (stacked from Phase 5; main unchanged)
+- **Working branch:** phase-8-api-completion (stacked on Phase 7 commit 563e037; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 6 — Redis caching and invalidation
+- **Current phase:** Phase 8 — API completion and contract
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-03
 
@@ -20,7 +20,9 @@
 | Phase 3: Authentication and authorisation | Implemented and committed; real-service verification deferred | Commit f1caf0a on phase-3-authentication-authorization; real Neo4j/Redis checks remain unverified |
 | Phase 4: Users and friendship | Implemented and committed; real-service verification deferred | Commit 5058eff on phase-4-users-friendship; concurrency, query-plan, and self-loop behavior remain unverified |
 | Phase 5: Pathfinding and recommendations | Implemented and committed; real-service verification deferred | Commit 46458ed on phase-5-pathfinding-recommendations; live path and recommendation behavior remains unverified |
-| Phase 6: Redis caching and invalidation | Implemented locally; real-service verification deferred | Cache consistency guarantee and local checks recorded below; real Neo4j/Redis behavior remains unverified |
+| Phase 6: Redis caching and invalidation | Implemented and committed; real-service verification deferred | Commit 610222b on phase-6-redis-caching-invalidation; cache consistency guarantee and local checks recorded below |
+| Phase 7: Dataset ingestion | Implemented and committed; real-service verification deferred | Commit 563e037 on phase-7-dataset-ingestion; checksum and parser checks passed, real graph ingestion remains unverified |
+| Phase 8: API completion and contract | In progress | OpenAPI contract, response metadata, pagination, body-size enforcement, and token-protected metrics are being verified locally; no commit created |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -102,8 +104,14 @@ For each phase, append:
 - **Unverified:** `REQUIRE_INTEGRATION=1 pytest -q -m integration` was attempted once and failed during service setup because Neo4j refused connections at `127.0.0.1:17687` (31 setup errors; 127 tests deselected). Real Neo4j/Redis cache, invalidation, outage, and shared-process behavior remains unverified; no retry or service-start workaround was attempted. The Redis outage test uses an unreachable Redis endpoint; the separate-process invalidation test is authored but could not be exercised.
 
 ### Phase 7
-- **Status:** Implemented locally on `phase-7-dataset-ingestion`, stacked on Phase 6 commit `610222b`; not committed.
+- **Status:** Implemented and committed on `phase-7-dataset-ingestion`, stacked on Phase 6 commit `610222b`; commit `563e037`.
 - **Implemented:** Checksum-verified SNAP download/cache; strict edge-list parser with malformed, self-loop, duplicate and ignored counters; additive batched Neo4j ingestion with summary-counter results and post-check; SNAP-only reset plus separately confirmed full wipe; cache-version bump after graph changes; schema/reset-cache/demo-user CLI commands; unit and real-service integration tests.
 - **Dataset terms:** The official [SNAP ego-Facebook page](https://snap.stanford.edu/data/ego-Facebook.html) describes the dataset and requests citation but does not state a dataset-specific redistribution license. SNAP's separate BSD page applies to SNAP software. The CLI therefore downloads the dataset directly and verifies its SHA-256 instead of asserting redistribution rights. The existing tracked archive under `scripts/` is preserved pending the user's decision about that pre-existing file.
 - **Local checks:** `ruff check .` passed; `ruff format --check app tests` passed (50 files); non-integration tests passed (133 passed, 36 deselected); `pip-audit -r requirements.txt` reported no known vulnerabilities; `git diff --check` passed. Parsing the preserved archive took 0.299 seconds and produced 4,039 users and 88,234 valid edges with zero malformed, self-loop, or duplicate lines. Full-repository `ruff format --check .` was blocked by access-denied files in the task-created `.phase7-pip-audit-cache`; formatting all application and test code passed. The archive SHA-256 is `125e84db872eeba443d270c70315c256b0af43a502fcfe51f50621166ad035d7`.
 - **Unverified:** Real Neo4j/Redis integration tests, including 4,039/88,234 loaded graph counts, idempotency, reset preservation, post-write counters, and graph-version behavior, remain deferred under the existing environment agreement. The actual ingestion duration and target machine therefore cannot be reported; no DB ingestion time is claimed. Docker/Bash were not used.
+
+### Phase 8
+- **Status:** Implemented locally on `phase-8-api-completion`, stacked on Phase 7 commit `563e037`; not committed.
+- **Implemented:** Audited the Section 7.1 route inventory; added stable operation IDs, tags, response models/examples and documented error envelopes; unified paged responses; protected `/metrics` with Bearer authentication while excluding it from public OpenAPI; added a configurable request-body limit; added deterministic OpenAPI/API reference generation and contract tests; documented the API and added only narrow `.gitignore` exceptions for those generated deliverables.
+- **Local checks:** `ruff check .` passed; `ruff format --check . --extend-exclude .phase7-pip-audit-cache` passed (62 files); `scripts/export_openapi.py --check` passed; `pytest -q -m "not integration and not e2e"` passed (143 passed, 36 deselected); `pip-audit -r requirements.txt` reported no known vulnerabilities; `git diff --check` passed.
+- **Unverified:** No real Neo4j/Redis integration or full-stack e2e checks were run under the existing environment deferral. `/metrics` authentication and response were checked through TestClient, not with a live Prometheus scrape. Docker/Bash were not used.
