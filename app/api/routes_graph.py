@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 from neo4j import Driver
 
 from app.api.deps import get_current_user
 from app.db.neo4j_db import get_driver
 from app.models.schemas import PathResponse, SuggestionResponse
-from app.repositories import graph_repo
 from app.services import pathfinder
 
 router = APIRouter(prefix="/api/v1", tags=["Graph"])
+USER_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
 
 @router.get(
@@ -16,8 +16,8 @@ router = APIRouter(prefix="/api/v1", tags=["Graph"])
     summary="Shortest path between two users (protected)",
 )
 def get_path(
-    user1: str,
-    user2: str,
+    user1: str = Path(..., pattern=USER_ID_PATTERN),
+    user2: str = Path(..., pattern=USER_ID_PATTERN),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
 ):
@@ -42,7 +42,7 @@ def get_my_suggestions(
     summary="Get friend suggestions for a user (protected)",
 )
 def get_suggestions(
-    user_id: str,
+    user_id: str = Path(..., pattern=USER_ID_PATTERN),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
 ):

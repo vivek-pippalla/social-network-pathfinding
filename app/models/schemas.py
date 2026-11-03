@@ -1,9 +1,17 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 # ─── User ────────────────────────────────────────────────────────────────────
+
 
 class PublicUserResponse(BaseModel):
     id: str
@@ -17,11 +25,33 @@ class OwnProfileResponse(PublicUserResponse):
 
 # ─── Connection ──────────────────────────────────────────────────────────────
 
+
 class ConnectionResponse(BaseModel):
     message: str
 
 
+class FriendCreatedResponse(BaseModel):
+    created: bool
+
+
+class FriendRemovedResponse(BaseModel):
+    removed: bool
+
+
+class FriendsPage(BaseModel):
+    items: list[PublicUserResponse]
+    limit: int
+    offset: int
+
+
+class MutualFriendsPage(BaseModel):
+    items: list[PublicUserResponse]
+    limit: int
+    offset: int
+
+
 # ─── Pathfinding ─────────────────────────────────────────────────────────────
+
 
 class PathResponse(BaseModel):
     start_user: str
@@ -32,6 +62,7 @@ class PathResponse(BaseModel):
 
 
 # ─── Suggestions ─────────────────────────────────────────────────────────────
+
 
 class SuggestedUser(BaseModel):
     user_id: str
@@ -44,6 +75,7 @@ class SuggestionResponse(BaseModel):
 
 
 # ─── Authentication ──────────────────────────────────────────────────────────
+
 
 class UserRegister(BaseModel):
     name: str = Field(min_length=1, max_length=100)

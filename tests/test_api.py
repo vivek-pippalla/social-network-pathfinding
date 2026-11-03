@@ -181,6 +181,15 @@ def test_search_is_protected_and_uses_public_projection(authenticated_client):
     assert "password_hash" not in response.text
 
 
+def test_search_rejects_whitespace_only_query_after_trimming(authenticated_client):
+    with patch("app.services.user_service.user_repo.search_users") as search:
+        response = authenticated_client.get("/api/v1/users/search?q=%20%20")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    search.assert_not_called()
+
+
 def test_own_profile_can_include_only_own_email(authenticated_client):
     profile = {
         "id": "test-user",
@@ -188,7 +197,9 @@ def test_own_profile_can_include_only_own_email(authenticated_client):
         "source": "app",
         "email": "alice@example.com",
     }
-    with patch("app.api.routes_users.user_repo.get_own_profile", return_value=profile):
+    with patch(
+        "app.api.routes_users.user_service.get_own_profile", return_value=profile
+    ):
         response = authenticated_client.get("/api/v1/users/me")
     assert response.status_code == 200
     assert response.json()["email"] == profile["email"]
@@ -203,8 +214,9 @@ def test_profile_update_changes_name_only(authenticated_client):
         "email": "alice@example.com",
     }
     with (
-        patch("app.api.routes_users.user_service.update_user") as update,
-        patch("app.api.routes_users.user_repo.get_own_profile", return_value=profile),
+        patch(
+            "app.api.routes_users.user_service.update_own_profile", return_value=profile
+        ) as update,
     ):
         response = authenticated_client.put("/api/v1/users/me", json={"name": "Alicia"})
     assert response.status_code == 200
@@ -274,13 +286,51 @@ def test_legacy_suggestions_endpoint_remains_functional(authenticated_client):
 def test_friend_route_remains_scoped_to_authenticated_caller(authenticated_client):
     with (
         patch(
-            "app.api.routes_friends.user_repo.get_user_by_id",
-            return_value={"id": "friend", "name": "Friend"},
-        ),
-        patch(
-            "app.api.routes_friends.graph_repo.create_connection"
-        ) as create_connection,
+            "app.api.routes_friends.friend_service.add_friend",
+            return_value={"created": True},
+        ) as add_friend,
     ):
-        response = authenticated_client.post("/friends/friend")
+        response = authenticated_client.post("/api/v1/friends/friend")
     assert response.status_code == 201
-    create_connection.assert_called_once_with(ANY, "test-user", "friend")
+    add_friend.assert_called_once_with(ANY, "test-user", "friend")
+
+
+def test_friend_endpoints_are_versioned_authenticated_and_validate_ids(
+    authenticated_client,
+):
+    with (
+        patch(
+            "app.api.routes_friends.friend_service.list_friends",
+            return_value=[{"id": "friend", "name": "Friend", "source": "app"}],
+        ) as list_friends,
+        patch(
+            "app.api.routes_friends.friend_service.remove_friend",
+            return_value={"removed": False},
+        ) as remove_friend,
+        patch(
+            "app.api.routes_friends.friend_service.mutual_friends",
+            return_value=[],
+        ) as mutual_friends,
+    ):
+        friends = authenticated_client.get("/api/v1/friends?limit=1&offset=0")
+        removed = authenticated_client.delete("/api/v1/friends/friend")
+        mutual = authenticated_client.get("/api/v1/users/friend/mutual")
+        malformed = authenticated_client.post("/api/v1/friends/%27")
+
+    assert friends.status_code == 200
+    assert friends.json()["items"][0]["id"] == "friend"
+    assert removed.json() == {"removed": False}
+    assert mutual.json()["items"] == []
+    assert malformed.status_code == 422
+    assert malformed.json()["error"]["code"] == "VALIDATION_ERROR"
+    list_friends.assert_called_once_with(ANY, "test-user", offset=0, limit=1)
+    remove_friend.assert_called_once_with(ANY, "test-user", "friend")
+    mutual_friends.assert_called_once_with(
+        ANY, "test-user", "friend", offset=0, limit=20
+    )
+
+
+def test_unversioned_friend_routes_are_removed():
+    for method in (client.get, client.post, client.delete):
+        response = method("/friends/someone")
+        assert response.status_code == 404

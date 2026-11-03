@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-3-authentication-authorization (stacked from Phase 2; main unchanged)
+- **Working branch:** phase-4-users-friendship (stacked from Phase 3; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 3 — authentication and authorisation
+- **Current phase:** Phase 4 — users and friendship
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-03
 
@@ -17,7 +17,8 @@
 | Phase 0: baseline, cleanup, dependency refresh | Complete locally; final review pending | Pushed branch remains unmerged by plan; final integrated review and merge are deferred until all phases are complete |
 | Phase 1: Application foundation | Complete locally; awaiting user review | Stacked from Phase 0; local acceptance checks recorded below; no commit created |
 | Phase 2: Graph schema and real-infrastructure test harness | Implemented and committed; integration verification deferred | Commit 6bb16bb on phase-2-graph-schema-test-harness; user directed deferral until environment setup is complete |
-| Phase 3: Authentication and authorisation | Implementation in progress; integration verification deferred | Local checks are green; real Neo4j/Redis acceptance items remain unverified |
+| Phase 3: Authentication and authorisation | Implemented and committed; real-service verification deferred | Commit f1caf0a on phase-3-authentication-authorization; real Neo4j/Redis checks remain unverified |
+| Phase 4: Users and friendship | Implementation in progress; real-service verification deferred | Local checks recorded below; concurrency, query-plan, and self-loop behavior remain unverified |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -73,7 +74,14 @@ For each phase, append:
 - **Known:** Real Neo4j and Redis behavior remains unverified until environment setup is complete.
 
 ### Phase 3
-- **Status:** In progress on phase-3-authentication-authorization, stacked on Phase 2 commit 6bb16bb.
+- **Status:** Implemented and committed on phase-3-authentication-authorization, stacked on Phase 2 commit 6bb16bb.
 - **Implemented:** PyJWT/Argon2id account flow; separate Account/User creation transaction; normalized unique email handling; registration validation; dummy-hash login; Redis rate limiting; current-user existence check; private/public profile separation; removed open user creation and arbitrary connection routes; authentication tests and SECURITY.md draft.
 - **Checks:** Ruff check passed; Ruff format check passed (40 files); non-integration suite passed (93 passed, 13 integration cases deselected, no warnings); full pip-audit runtime dependency graph reported no known vulnerabilities.
 - **Unverified:** Real Neo4j/Redis integration suite, including concurrent registration and the deliberate dropped-constraint mutation check, was not run per user direction to defer real-service verification. Docker/Bash were not invoked.
+
+### Phase 4
+- **Status:** Implementation in progress on phase-4-users-friendship, based on Phase 3 commit f1caf0a.
+- **Implemented:** Canonical friendship repository operations with managed transactions and query timeouts; service-level self/unknown-user rules and post-commit change hook; versioned friend list/add/remove/mutual routes; user profile/search delegation through services; indexed name search and ID validation; unit and real-service integration tests.
+- **Local checks:** Ruff lint and format passed; `pytest -q -m "not integration and not e2e"` passed (101 passed, 20 deselected); integration collection found 20 tests. `git diff --check` passed.
+- **Unverified:** No real Neo4j/Redis integration tests were executed per the prior deferral. The 50-way friendship concurrency result, text-index query plan, and Neo4j self-loop `MERGE` behavior require the dedicated integration services.
+- **Dependency audit:** `pip-audit -r requirements.txt --cache-dir <temporary cache>` reported no known vulnerabilities.
