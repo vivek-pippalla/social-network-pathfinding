@@ -22,8 +22,7 @@ class BlockAwsImports(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockAwsImports())
 
 import app.main as main
-import app.services.s3_service
-import scripts.seed_data
+import app.cli
 
 from fastapi.testclient import TestClient
 app = main.create_app(

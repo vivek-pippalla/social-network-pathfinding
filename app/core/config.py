@@ -41,14 +41,6 @@ class Settings(BaseSettings):
     AUTO_SCHEMA: bool = True
     ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
-    # Kept temporarily because the existing AWS/ingestion code still imports these.
-    AWS_REGION: str = "ap-south-1"
-    AWS_S3_BUCKET: str = ""
-    AWS_S3_DATASET_KEY: str = "datasets/facebook_combined.txt.gz"
-    CLOUDWATCH_ENABLED: bool = False
-    CLOUDWATCH_LOG_GROUP: str = "/social-network-pathfinding/app"
-    CLOUDWATCH_LOG_RETENTION_DAYS: int = 14
-
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("SECRET_KEY")

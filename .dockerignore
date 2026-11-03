@@ -15,3 +15,5 @@ tests/
 documentation/
 monitoring/
 infra/
+/scripts/facebook_combined.txt.gz
+/data/facebook_combined.txt.gz

@@ -28,6 +28,7 @@ COPY --from=builder /usr/local /usr/local
 
 COPY app/ ./app/
 COPY scripts/ ./scripts/
+COPY data/ ./data/
 COPY requirements.txt .
 
 ENV PYTHONPATH="/app"

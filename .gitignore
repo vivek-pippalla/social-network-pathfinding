@@ -17,6 +17,7 @@ env/
 logs/
 redis_data/
 mongo_data/
+/data/facebook_combined.txt.gz
 
 # OS files
 .DS_Store

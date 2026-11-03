@@ -47,7 +47,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
 | **Graph Algorithm** | **Shortest Path** | Bidirectional BFS with hop counts between any two nodes in <150 ms |
 | **Caching** | **Planned for Phase 6** | Redis cache-aside with graph-version invalidation; not implemented yet |
 | **Recommendations** | **Friend Suggestions** | Triadic closure ranking friends-of-friends by mutual connections |
-| **Cloud Storage** | **S3 Dataset Ingestion** | Robust, private S3 ingestion with data validation and URL/local fallbacks |
+| **Dataset** | **SNAP Graph Ingestion** | Checksum-verified download, validated parsing, additive Neo4j batches |
 | **Security & Config** | **Host Secret Isolation** | Protected `.env.prod` (chmod 600) outside Git; unexposed internal database ports |
 | **Observability** | **CloudWatch & Prometheus** | Dual-tier monitoring: CloudWatch JSON logs + Prometheus/Grafana metrics |
 | **Identity & Access** | **JWT & Least-Privilege IAM** | OAuth2 password flow with bcrypt + fine-grained AWS IAM roles & policies |
@@ -184,8 +184,8 @@ docker compose up --build -d
 
 ### 3. Seed Dataset
 ```bash
-# Ingests from local file / URL / S3 automatically with full record validation
-docker exec -it social-network-api python scripts/seed_data.py
+# Downloads the official SNAP archive if needed, verifies its checksum, and imports it additively.
+docker compose run --rm api python -m app.cli ingest
 ```
 
 ### 4. Access Services
@@ -199,7 +199,7 @@ docker exec -it social-network-api python scripts/seed_data.py
 
 ## Running Tests
 
-The test suite runs 100% offline with zero live infrastructure dependencies by mocking database and AWS SDK calls:
+Unit tests run offline. Integration tests use real Neo4j and Redis and are marked separately:
 
 ```bash
 # Run the complete test suite
@@ -209,7 +209,7 @@ pytest tests/ -v
 **Test Coverage Highlights:**
 - **API routes & Auth:** JWT encoding/decoding, token expiry, password hashing, 401 guards, friend management.
 - **Graph & pathfinding:** Neo4j path queries and hop counts. Redis path caching is planned for Phase 6.
-- **S3 Dataset Pipeline:** S3 downloads, ClientError handling, record validation, URL fallbacks, production failure enforcement.
+- **Dataset ingestion:** checksum validation, parser rejection counts, reset confirmation, idempotent writes, and cache-version updates.
 - **CloudWatch Logging:** Handler attachment, duplicate prevention, structured JSON formatting.
 - **Deployment & Rollback Logic:** Success states, healthcheck timeout, automated rollback restoration, critical rollback failure reporting.
 
@@ -227,9 +227,10 @@ The previous AWS guide and deployment files are inactive historical references. 
 
 ```text
 social-network-pathfinding/
-├── app/                         # FastAPI application
+├── app/                         # FastAPI application and ingestion CLI
+├── data/                        # SNAP source citation and checksum details
 ├── deploy/aws/legacy/           # Inactive historical AWS deployment material
-├── scripts/seed_data.py         # Dataset ingestion utility
+├── scripts/test-infra.sh        # Isolated real-service test stack helper
 ├── tests/                       # Automated test suite
 ├── docker-compose.yml           # Local development stack
 ├── docker-compose.prod.yml      # Production-like stack
