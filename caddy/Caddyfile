@@ -9,6 +9,10 @@
 # ==============================================================================
 
 {$DOMAIN_NAME:localhost} {
+    # Metrics are scraped only on the Docker network, never through public ingress.
+    @metrics path /metrics /metrics/*
+    respond @metrics 404
+
     # Reverse proxy to the FastAPI container on the internal Docker network
     reverse_proxy api:5000 {
         header_up Host {upstream_hostport}

@@ -1,5 +1,7 @@
 from neo4j import Driver
 
+from app.core.metrics import observe_neo4j_query
+
 
 def _create_account_and_user(
     tx,
@@ -36,6 +38,7 @@ def _create_account_and_user(
     return dict(record)
 
 
+@observe_neo4j_query("account.create")
 def create_account_and_user(
     driver: Driver,
     *,
@@ -56,6 +59,7 @@ def create_account_and_user(
         )
 
 
+@observe_neo4j_query("account.get_by_email")
 def get_account_by_email(driver: Driver, email_normalized: str) -> dict | None:
     with driver.session() as session:
         record = session.execute_read(
@@ -70,6 +74,7 @@ def get_account_by_email(driver: Driver, email_normalized: str) -> dict | None:
     return dict(record) if record else None
 
 
+@observe_neo4j_query("account.update_password_hash")
 def update_password_hash(driver: Driver, user_id: str, password_hash: str) -> None:
     with driver.session() as session:
         session.execute_write(

@@ -1,8 +1,10 @@
 from neo4j import Driver, Query
 
 from app.core.config import settings
+from app.core.metrics import observe_neo4j_query
 
 
+@observe_neo4j_query("graph.get_users_by_ids")
 def get_users_by_ids(driver: Driver, user_ids: list[str]) -> dict[str, dict]:
     """Return public User projections for the requested IDs in one read tx."""
     with driver.session() as session:
@@ -24,6 +26,7 @@ def get_users_by_ids(driver: Driver, user_ids: list[str]) -> dict[str, dict]:
     return {record["id"]: dict(record) for record in records}
 
 
+@observe_neo4j_query("graph.find_bounded_shortest_path")
 def find_bounded_shortest_path(
     driver: Driver, start_id: str, end_id: str, max_depth: int
 ) -> list[dict] | None:
@@ -46,6 +49,7 @@ def find_bounded_shortest_path(
     return record["path"] if record else None
 
 
+@observe_neo4j_query("graph.get_recommendations")
 def get_recommendations(
     driver: Driver, user_id: str, offset: int = 0, limit: int = 20
 ) -> list[dict]:
@@ -101,6 +105,7 @@ def _add_friendship(tx, low_id: str, high_id: str, timeout: float):
     return dict(record), summary.counters.relationships_created > 0
 
 
+@observe_neo4j_query("graph.add_friendship")
 def add_friendship(driver: Driver, user_id_1: str, user_id_2: str) -> tuple[bool, bool]:
     low_id, high_id = canonical_pair(user_id_1, user_id_2)
     with driver.session() as session:
@@ -135,6 +140,7 @@ def _remove_friendship(tx, low_id: str, high_id: str, timeout: float):
     return dict(record), summary.counters.relationships_deleted > 0
 
 
+@observe_neo4j_query("graph.remove_friendship")
 def remove_friendship(
     driver: Driver, user_id_1: str, user_id_2: str
 ) -> tuple[bool, bool]:
@@ -168,6 +174,7 @@ def _list_friends(tx, user_id: str, offset: int, limit: int, timeout: float):
     return [dict(record) for record in result]
 
 
+@observe_neo4j_query("graph.list_friends")
 def list_friends(
     driver: Driver, user_id: str, offset: int = 0, limit: int = 20
 ) -> list[dict]:
@@ -203,6 +210,7 @@ def _mutual_friends(
     return [dict(record) for record in result]
 
 
+@observe_neo4j_query("graph.mutual_friends")
 def mutual_friends(
     driver: Driver, user_id_1: str, user_id_2: str, offset: int = 0, limit: int = 20
 ) -> list[dict]:

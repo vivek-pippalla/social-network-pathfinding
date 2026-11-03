@@ -1,12 +1,15 @@
 from collections.abc import Callable
+import logging
 
 from neo4j import Driver
 
 from app.core.exceptions import UserNotFoundException
+from app.core.metrics import FRIEND_MUTATIONS
 from app.domain.errors import AppError
 from app.repositories import graph_repo, user_repo
 
 GraphChangedHook = Callable[[], None]
+logger = logging.getLogger(__name__)
 
 
 def _noop_graph_changed() -> None:
@@ -23,6 +26,12 @@ class FriendService:
         exists, changed = graph_repo.add_friendship(driver, caller_id, friend_id)
         if not exists:
             raise UserNotFoundException(friend_id)
+        outcome = "created" if changed else "exists"
+        FRIEND_MUTATIONS.labels(outcome=outcome).inc()
+        logger.info(
+            "friend_added",
+            extra={"event": "friend_added", "outcome": outcome},
+        )
         if changed:
             self._on_graph_changed()
         return {"created": changed}
@@ -33,6 +42,12 @@ class FriendService:
         exists, changed = graph_repo.remove_friendship(driver, caller_id, friend_id)
         if not exists:
             raise UserNotFoundException(friend_id)
+        outcome = "removed" if changed else "noop"
+        FRIEND_MUTATIONS.labels(outcome=outcome).inc()
+        logger.info(
+            "friend_removed",
+            extra={"event": "friend_removed", "outcome": outcome},
+        )
         if changed:
             self._on_graph_changed()
         return {"removed": changed}

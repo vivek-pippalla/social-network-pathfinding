@@ -54,7 +54,10 @@ limits; search continues if Redis is unavailable.
 
 ## Operational routes
 
-`/metrics` is excluded from the public OpenAPI schema and requires a valid
-Bearer token. `/docs` and `/openapi.json` are available only when `ENABLE_DOCS`
-is enabled. `GET /health` is liveness; `GET /health/ready` checks Neo4j and
-reports Redis as `ok` or `degraded`.
+`/metrics` is excluded from the public OpenAPI schema. The API allows only
+loopback or private-network connection peers and ignores forwarded client-IP
+headers. The development API port is bound to localhost, and Caddy returns 404
+for `/metrics` before proxying public traffic. Other reverse proxies must also
+deny this path instead of forwarding it. `/docs` and `/openapi.json` are
+available only when `ENABLE_DOCS` is enabled. `GET /health` is liveness;
+`GET /health/ready` checks Neo4j and reports Redis as `ok` or `degraded`.

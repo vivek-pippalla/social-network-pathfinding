@@ -8,6 +8,7 @@ from typing import Literal
 import redis
 from pydantic import BaseModel, ValidationError, model_validator
 
+from app.core.metrics import PATH_CACHE_OPERATIONS
 from app.db.redis_cache import get_client
 from app.models.schemas import PathNode
 
@@ -63,7 +64,10 @@ class CacheService:
             if previous is not None and now - previous < self._warning_interval_seconds:
                 return
             self._last_warning[operation] = now
-        logger.warning("Redis cache operation failed", extra={"operation": operation})
+        logger.warning(
+            "cache_error",
+            extra={"event": "cache_error", "operation": operation},
+        )
 
     def _get_version(self) -> int | None:
         try:
@@ -73,29 +77,36 @@ class CacheService:
                 raise ValueError("graph version cannot be negative")
             return version
         except redis.RedisError:
+            PATH_CACHE_OPERATIONS.labels(result="error").inc()
             self._warn("read_version")
             return None
         except (TypeError, ValueError):
+            PATH_CACHE_OPERATIONS.labels(result="error").inc()
             self._warn("read_version")
             return None
 
     def get_path(self, start_id: str, end_id: str) -> PathCacheLookup:
         version = self._get_version()
         if version is None:
+            PATH_CACHE_OPERATIONS.labels(result="miss").inc()
             return PathCacheLookup(version=None, hit=False)
 
         key = self.path_key(version, start_id, end_id)
         try:
             encoded = self._redis_provider().get(key)
         except redis.RedisError:
+            PATH_CACHE_OPERATIONS.labels(result="error").inc()
+            PATH_CACHE_OPERATIONS.labels(result="miss").inc()
             self._warn("read_path")
             return PathCacheLookup(version=version, hit=False)
         if encoded is None:
+            PATH_CACHE_OPERATIONS.labels(result="miss").inc()
             return PathCacheLookup(version=version, hit=False)
 
         try:
             payload = CachedPathPayload.model_validate_json(encoded)
             if payload.state == "not_found":
+                PATH_CACHE_OPERATIONS.labels(result="hit").inc()
                 return PathCacheLookup(version=version, hit=True)
             low_id, high_id = sorted((start_id, end_id))
             path = [node.model_dump() for node in payload.path or []]
@@ -103,8 +114,11 @@ class CacheService:
                 raise ValueError("cached path endpoints do not match its key")
             if start_id != low_id:
                 path.reverse()
+            PATH_CACHE_OPERATIONS.labels(result="hit").inc()
             return PathCacheLookup(version=version, hit=True, path=path)
         except (ValidationError, ValueError, TypeError):
+            PATH_CACHE_OPERATIONS.labels(result="error").inc()
+            PATH_CACHE_OPERATIONS.labels(result="miss").inc()
             self._warn("decode_path")
             return PathCacheLookup(version=version, hit=False)
 
@@ -136,10 +150,12 @@ class CacheService:
         try:
             self._redis_provider().setex(key, ttl, payload.model_dump_json())
         except redis.RedisError:
+            PATH_CACHE_OPERATIONS.labels(result="error").inc()
             self._warn("write_path")
 
     def bump_version(self) -> None:
         try:
             self._redis_provider().incr(GRAPH_VERSION_KEY)
         except redis.RedisError:
+            PATH_CACHE_OPERATIONS.labels(result="error").inc()
             self._warn("bump_version")

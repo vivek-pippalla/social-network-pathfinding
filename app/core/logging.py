@@ -20,7 +20,16 @@ class JSONFormatter(logging.Formatter):
             "function": record.funcName,
             "request_id": getattr(record, "request_id", request_id_var.get()),
         }
-        for key in ("method", "route", "status", "duration_ms"):
+        for key in (
+            "method",
+            "route",
+            "status",
+            "duration_ms",
+            "event",
+            "operation",
+            "outcome",
+            "email_hash",
+        ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
         return json.dumps(payload)

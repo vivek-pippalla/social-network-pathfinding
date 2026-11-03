@@ -1,8 +1,10 @@
 from neo4j import Driver, Query
 
 from app.core.config import settings
+from app.core.metrics import observe_neo4j_query
 
 
+@observe_neo4j_query("user.get_by_id")
 def get_user_by_id(driver: Driver, user_id: str) -> dict | None:
     with driver.session() as session:
         record = session.execute_read(
@@ -20,6 +22,7 @@ def get_user_by_id(driver: Driver, user_id: str) -> dict | None:
     return dict(record) if record else None
 
 
+@observe_neo4j_query("user.get_own_profile")
 def get_own_profile(driver: Driver, user_id: str) -> dict | None:
     with driver.session() as session:
         record = session.execute_read(
@@ -38,6 +41,7 @@ def get_own_profile(driver: Driver, user_id: str) -> dict | None:
     return dict(record) if record else None
 
 
+@observe_neo4j_query("user.exists")
 def user_exists(driver: Driver, user_id: str) -> bool:
     with driver.session() as session:
         record = session.execute_read(
@@ -52,6 +56,7 @@ def user_exists(driver: Driver, user_id: str) -> bool:
     return record is not None
 
 
+@observe_neo4j_query("user.update")
 def update_user(driver: Driver, user_id: str, name: str) -> dict | None:
     with driver.session() as session:
         record = session.execute_write(
@@ -72,6 +77,7 @@ def update_user(driver: Driver, user_id: str, name: str) -> dict | None:
     return dict(record) if record else None
 
 
+@observe_neo4j_query("user.search")
 def search_users(
     driver: Driver, query: str, offset: int = 0, limit: int = 20
 ) -> list[dict]:

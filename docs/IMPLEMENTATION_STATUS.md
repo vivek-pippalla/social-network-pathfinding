@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-8-api-completion (stacked on Phase 7 commit 563e037; main unchanged)
+- **Working branch:** phase-10-observability (stacked on Phase 9 commit 9c9ab34; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 8 — API completion and contract
+- **Current phase:** Phase 10 — Observability
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-03
 
@@ -22,7 +22,9 @@
 | Phase 5: Pathfinding and recommendations | Implemented and committed; real-service verification deferred | Commit 46458ed on phase-5-pathfinding-recommendations; live path and recommendation behavior remains unverified |
 | Phase 6: Redis caching and invalidation | Implemented and committed; real-service verification deferred | Commit 610222b on phase-6-redis-caching-invalidation; cache consistency guarantee and local checks recorded below |
 | Phase 7: Dataset ingestion | Implemented and committed; real-service verification deferred | Commit 563e037 on phase-7-dataset-ingestion; checksum and parser checks passed, real graph ingestion remains unverified |
-| Phase 8: API completion and contract | In progress | OpenAPI contract, response metadata, pagination, body-size enforcement, and token-protected metrics are being verified locally; no commit created |
+| Phase 8: API completion and contract | Implemented and committed | Commit cf8c32f on phase-8-api-completion; API contract and local checks recorded below |
+| Phase 9: Frontend reconstruction | Implemented and committed | Commit 9c9ab34 on phase-9-frontend-reconstruction; browser E2E and real-service verification remain deferred |
+| Phase 10: Observability | In progress | Application metrics, structured safe events, internal-only metrics access, and the monitoring profile are being verified locally |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -123,3 +125,9 @@ For each phase, append:
 - **Local checks:** `ruff check .` passed (with access-denied warnings while scanning the ignored audit cache); `ruff format --check . --extend-exclude .phase7-pip-audit-cache` passed (65 files). The non-integration/non-e2e suite passed (148 passed, 1 skipped, 36 deselected); all 4 frontend contract/accessibility checks passed. Vendored asset and license hashes were computed and recorded. `git diff --check` passed.
 - **Unverified:** Browser end-to-end journey, visual/mobile behavior, actual CSP behavior in a browser, and screen-reader/manual keyboard checks were not run. Playwright is not installed here; its e2e module was skipped for that reason. `pip-audit -r requirements.txt` did not complete: pip-audit failed while trying to upgrade pip in its temporary environment. Real Neo4j/Redis integration and full stack startup remain deferred. To run e2e from PowerShell: install dev requirements with `python -m pip install -r requirements-dev.txt`, then `python -m playwright install chromium`; create `.env` from `.env.example` and replace its secret placeholders locally; start the configured stack with `docker compose up -d --build`; then run `$env:BASE_URL='http://127.0.0.1:5000'; python -m pytest -q -m e2e tests/e2e/test_smoke.py`.
 - **Manual accessibility checklist (not completed):** tab through sign-in/register, each navigation item and all forms; verify focus moves to each screen heading; confirm focus indicators and live announcements; operate suggestions, friend controls, mutual view and graph without a mouse; inspect a 375px-wide viewport; check graph labels and path text with a screen reader; verify reduced-motion behavior and color contrast.
+
+### Phase 10
+- **Status:** In progress on `phase-10-observability`, stacked on Phase 9 commit `9c9ab34`; uncommitted pending review.
+- **Implemented:** Prometheus counters and histograms for cache, path, friendship, authentication, rate limiting, and Neo4j repository operations; structured safe domain events with HMAC email identifiers; source-IP-based `/metrics` access limited to loopback and private network peers (forwarded headers are ignored); development API and monitoring ports bind to localhost; Caddy denies `/metrics` before proxying public traffic; Prometheus/Grafana monitoring profile, provisioned datasource/dashboard, and environment-supplied Grafana credentials with empty and example-placeholder startup guards.
+- **Local checks:** Ruff lint passed; Ruff format check passed (61 files); `scripts/export_openapi.py --check` passed; `pytest -q -m "not integration and not e2e" -k "not test_docker_compose_config_validation"` passed (158 passed, 1 skipped, 37 deselected); Compose/Caddy configuration unit checks ran in that suite; `git diff --check` passed; `pip-audit -r requirements.txt` passed with no known vulnerabilities during implementation. The Docker-dependent Compose test was excluded by request.
+- **Unverified:** Real Neo4j/Redis integration remains deferred under the existing environment agreement. Docker Compose is installed, but `docker info` could not access the Docker engine named pipe (permission denied), so the monitoring profile and Caddy proxy were not started; no live dashboard panels or proxy behavior were observed. The Compose CLI config check was not rerun after review fixes. Caddy denial is covered by a static configuration assertion only.

@@ -34,6 +34,10 @@ def test_caddyfile_exists_and_has_required_directives():
     # Must reverse proxy to internal api:5000 service
     assert "reverse_proxy api:5000" in content
 
+    # Metrics must be denied before public traffic reaches the API.
+    assert "@metrics path /metrics /metrics/*" in content
+    assert "respond @metrics 404" in content
+
     # Must inject reverse proxy headers for scheme and client IP
     assert "X-Forwarded-Proto {scheme}" in content
     assert "X-Forwarded-For {remote_host}" in content

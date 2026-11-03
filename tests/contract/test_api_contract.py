@@ -157,21 +157,16 @@ def test_protected_route_matrix_rejects_requests_without_tokens():
         assert response.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
-def test_metrics_is_bearer_protected_but_not_in_public_openapi():
-    response = TestClient(app).get("/metrics")
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+def test_metrics_rejects_external_peer_and_ignores_forwarded_headers():
+    client = TestClient(app, client=("198.51.100.14", 12345))
+    response = client.get("/metrics", headers={"X-Forwarded-For": "172.18.0.4"})
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
     assert "/metrics" not in openapi()["paths"]
 
 
-def test_metrics_is_available_after_bearer_authentication():
-    previous = app.dependency_overrides.copy()
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "monitor"}
-    try:
-        response = TestClient(app).get("/metrics")
-    finally:
-        app.dependency_overrides.clear()
-        app.dependency_overrides.update(previous)
+def test_metrics_is_available_from_private_compose_network_without_auth():
+    response = TestClient(app, client=("172.20.0.4", 12345)).get("/metrics")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
 

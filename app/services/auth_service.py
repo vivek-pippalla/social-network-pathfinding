@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import timedelta
 
@@ -7,6 +8,8 @@ from redis import Redis
 
 from app.core import rate_limit
 from app.core.config import settings
+from app.core.metrics import AUTH_FAILURES
+from app.core.observability import email_identifier
 from app.core.security import (
     create_access_token,
     dummy_password_hash,
@@ -18,6 +21,7 @@ from app.domain.errors import AppError, EmailTakenError
 from app.repositories import account_repo
 
 INVALID_CREDENTIALS = "Incorrect email or password."
+logger = logging.getLogger(__name__)
 
 
 def _token_response(user_id: str) -> dict:
@@ -74,6 +78,15 @@ def login(
     password_hash = account["password_hash"] if account else dummy_hash
     valid_password = verify_password(password, password_hash)
     if account is None or not valid_password:
+        AUTH_FAILURES.labels(operation="login", reason="invalid_credentials").inc()
+        logger.warning(
+            "login_failed",
+            extra={
+                "event": "login_failed",
+                "operation": "login",
+                "email_hash": email_identifier(normalized_email),
+            },
+        )
         raise AppError("UNAUTHENTICATED", INVALID_CREDENTIALS, 401)
     if password_needs_rehash(account["password_hash"]):
         account_repo.update_password_hash(

@@ -1,10 +1,12 @@
 import logging
+import ipaddress
 import re
 import time
 import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -29,11 +31,35 @@ from app.services.friend_service import FriendService
 
 logger = logging.getLogger("app.access")
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+INTERNAL_NETWORKS = tuple(
+    ipaddress.ip_network(network)
+    for network in (
+        "127.0.0.0/8",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "::1/128",
+        "fc00::/7",
+    )
+)
 DESCRIPTION = (
     "Social graph API for user profiles, friendship connections, pathfinding, and "
     "friend recommendations. Request bodies are limited by MAX_REQUEST_BODY_BYTES "
     "(1 MiB by default)."
 )
+
+
+def require_internal_metrics_client(request: Request) -> None:
+    """Allow loopback/private-network peers; ignore forwarded client headers."""
+    host = request.client.host if request.client else ""
+    try:
+        address = ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Metrics are internal only.")
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    if not any(address in network for network in INTERNAL_NETWORKS):
+        raise HTTPException(status_code=403, detail="Metrics are internal only.")
 
 
 def create_app(
@@ -143,7 +169,7 @@ def create_app(
     @application.get(
         "/metrics",
         include_in_schema=False,
-        dependencies=[Depends(get_current_user)],
+        dependencies=[Depends(require_internal_metrics_client)],
     )
     async def metrics():
         return Response(
