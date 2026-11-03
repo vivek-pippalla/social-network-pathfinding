@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from neo4j import Driver
@@ -6,8 +6,18 @@ from neo4j import Driver
 from app.core.security import decode_access_token
 from app.db.neo4j_db import get_driver
 from app.repositories import user_repo
+from app.services.cache_service import CacheService
+from app.services.friend_service import FriendService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+
+
+def get_cache_service(request: Request) -> CacheService:
+    return request.app.state.cache_service
+
+
+def get_friend_service(request: Request) -> FriendService:
+    return request.app.state.friend_service
 
 
 def get_current_user(

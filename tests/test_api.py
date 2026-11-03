@@ -283,7 +283,7 @@ def test_path_endpoint_returns_named_nodes_from_path_service(authenticated_clien
     assert response.status_code == 200
     assert response.json()["cached"] is False
     assert response.json()["path"][0] == {"id": "0", "name": "User 0"}
-    find_path.assert_called_once_with(ANY, "0", "150")
+    find_path.assert_called_once_with(ANY, "0", "150", ANY)
 
 
 @pytest.mark.parametrize(
@@ -340,9 +340,8 @@ def test_suggestions_routes_use_paged_recommendation_service(authenticated_clien
 
 def test_friend_route_remains_scoped_to_authenticated_caller(authenticated_client):
     with (
-        patch(
-            "app.api.routes_friends.friend_service.add_friend",
-            return_value={"created": True},
+        patch.object(
+            app.state.friend_service, "add_friend", return_value={"created": True}
         ) as add_friend,
     ):
         response = authenticated_client.post("/api/v1/friends/friend")
@@ -354,18 +353,18 @@ def test_friend_endpoints_are_versioned_authenticated_and_validate_ids(
     authenticated_client,
 ):
     with (
-        patch(
-            "app.api.routes_friends.friend_service.list_friends",
+        patch.object(
+            app.state.friend_service,
+            "list_friends",
             return_value=[{"id": "friend", "name": "Friend", "source": "app"}],
         ) as list_friends,
-        patch(
-            "app.api.routes_friends.friend_service.remove_friend",
+        patch.object(
+            app.state.friend_service,
+            "remove_friend",
             return_value={"removed": False},
         ) as remove_friend,
-        patch(
-            "app.api.routes_friends.friend_service.mutual_friends",
-            return_value=[],
-        ) as mutual_friends,
+        patch.object(app.state.friend_service, "mutual_friends", return_value=[])
+        as mutual_friends,
     ):
         friends = authenticated_client.get("/api/v1/friends?limit=1&offset=0")
         removed = authenticated_client.delete("/api/v1/friends/friend")

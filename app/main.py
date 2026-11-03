@@ -19,6 +19,8 @@ from app.db.neo4j_db import close_driver, get_driver
 from app.db.redis_cache import get_client
 from app.db.schema import ensure_schema
 from app.domain.errors import UnavailableError
+from app.services.cache_service import CacheService
+from app.services.friend_service import FriendService
 
 logger = logging.getLogger("app.access")
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -57,6 +59,15 @@ def create_app(
     )
     application.state.driver_provider = driver_provider
     application.state.redis_provider = redis_provider
+    cache_service = CacheService(
+        redis_provider,
+        positive_ttl=config.CACHE_TTL_SECONDS,
+        negative_ttl=config.NEGATIVE_CACHE_TTL_SECONDS,
+    )
+    application.state.cache_service = cache_service
+    application.state.friend_service = FriendService(
+        on_graph_changed=cache_service.bump_version
+    )
     install_exception_handlers(application)
 
     @application.middleware("http")

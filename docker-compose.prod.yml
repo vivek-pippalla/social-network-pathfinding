@@ -121,7 +121,16 @@ services:
     # NOTICE: Port 6379 is NOT bound to host in production.
     expose:
       - "6379"
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - volatile-lru
+      - --appendonly
+      - "no"
+      - --save
+      - ""
     volumes:
       - redis_prod_data:/data
     deploy:

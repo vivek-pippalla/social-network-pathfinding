@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-5-pathfinding-recommendations (stacked from Phase 4; main unchanged)
+- **Working branch:** phase-6-redis-caching-invalidation (stacked from Phase 5; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 5 — pathfinding and recommendations
+- **Current phase:** Phase 6 — Redis caching and invalidation
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-03
 
@@ -19,7 +19,8 @@
 | Phase 2: Graph schema and real-infrastructure test harness | Implemented and committed; integration verification deferred | Commit 6bb16bb on phase-2-graph-schema-test-harness; user directed deferral until environment setup is complete |
 | Phase 3: Authentication and authorisation | Implemented and committed; real-service verification deferred | Commit f1caf0a on phase-3-authentication-authorization; real Neo4j/Redis checks remain unverified |
 | Phase 4: Users and friendship | Implemented and committed; real-service verification deferred | Commit 5058eff on phase-4-users-friendship; concurrency, query-plan, and self-loop behavior remain unverified |
-| Phase 5: Pathfinding and recommendations | Implementation in progress; real-service verification deferred | Local checks recorded below; path oracle and live recommendation/query behavior remain unverified |
+| Phase 5: Pathfinding and recommendations | Implemented and committed; real-service verification deferred | Commit 46458ed on phase-5-pathfinding-recommendations; live path and recommendation behavior remains unverified |
+| Phase 6: Redis caching and invalidation | Implemented locally; real-service verification deferred | Cache consistency guarantee and local checks recorded below; real Neo4j/Redis behavior remains unverified |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -88,7 +89,14 @@ For each phase, append:
 - **Dependency audit:** `pip-audit -r requirements.txt --cache-dir <temporary cache>` reported no known vulnerabilities.
 
 ### Phase 5
-- **Status:** Implementation in progress on phase-5-pathfinding-recommendations, based on Phase 4 commit 5058eff.
+- **Status:** Implemented and committed on phase-5-pathfinding-recommendations, based on Phase 4 commit 5058eff; commit 46458ed.
 - **Implemented:** Bounded Neo4j path queries and path/recommendation services; named path nodes; authenticated paged suggestion routes; deterministic distinct-mutual recommendations; Neo4j transaction-timeout error mapping; BFS oracle, randomized real-service tests, and a no-seeding HTTP benchmark script.
 - **Local checks:** Ruff lint and format passed; `pytest -q -m "not integration and not e2e"` passed (117 passed, 25 deselected); integration collection found 25 tests; benchmark target-redaction tests passed; `benchmarks/bench_paths.py --help` passed; `pip-audit -r requirements.txt` reported no known vulnerabilities; `git diff --check` passed.
 - **Unverified:** Real Neo4j/Redis tests were not run under the existing deferral, including 200-graph oracle comparison, bounded shortest-path behavior, recommendation distinctness/paging, and the 1,000-degree hub query. The timeout response was tested with the installed driver’s hydrated `ClientError`; no timeout was induced against a live Neo4j server. The benchmark was not run against a live stack, so no latency results are claimed.
+
+### Phase 6
+- **Status:** Implemented locally on `phase-6-redis-caching-invalidation`, stacked on Phase 5 commit 46458ed; not committed.
+- **Implemented:** Versioned canonical path cache, reverse-direction reads, positive and negative TTLs, Redis timeout configuration and fail-open operations, graph-version invalidation after friend mutations, and disabled Redis persistence in the prod-like Compose command.
+- **Consistency guarantee:** Successful graph-version increments make prior path entries unreachable immediately. Redis uses `volatile-lru`, so TTL path entries can be evicted while the non-expiring graph-version counter is protected from LRU eviction. If an increment fails, stale positive entries can remain for at most `CACHE_TTL_SECONDS` (300 seconds by default); negative entries expire after `NEGATIVE_CACHE_TTL_SECONDS` (60 seconds by default). If Redis reads fail, path requests bypass the cache and query Neo4j. Cache warnings are throttled per operation to one per 30 seconds.
+- **Local checks:** `ruff check .` passed; `ruff format --check .` passed (53 files); `pytest -q -m "not integration and not e2e"` passed (131 passed, 31 deselected); `git diff --check` passed. The orientation regression test failed as expected with canonicalization/reversal temporarily removed, then passed in the restored implementation.
+- **Unverified:** `REQUIRE_INTEGRATION=1 pytest -q -m integration` was attempted once and failed during service setup because Neo4j refused connections at `127.0.0.1:17687` (31 setup errors; 127 tests deselected). Real Neo4j/Redis cache, invalidation, outage, and shared-process behavior remains unverified; no retry or service-start workaround was attempted. The Redis outage test uses an unreachable Redis endpoint; the separate-process invalidation test is authored but could not be exercised.

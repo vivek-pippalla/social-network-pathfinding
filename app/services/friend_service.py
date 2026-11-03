@@ -57,6 +57,3 @@ class FriendService:
         return graph_repo.mutual_friends(
             driver, caller_id, other_id, offset=offset, limit=limit
         )
-
-
-friend_service = FriendService()

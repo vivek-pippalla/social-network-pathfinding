@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, Path, Query
 from neo4j import Driver
 
-from app.api.deps import get_current_user
+from app.api.deps import get_cache_service, get_current_user
 from app.db.neo4j_db import get_driver
 from app.models.schemas import PathResponse, SuggestionResponse
 from app.services import path_service, recommendation_service
+from app.services.cache_service import CacheService
 
 router = APIRouter(prefix="/api/v1", tags=["Graph"])
 USER_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
@@ -20,8 +21,9 @@ def get_path(
     user2: str = Path(..., pattern=USER_ID_PATTERN),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
+    cache: CacheService = Depends(get_cache_service),
 ):
-    return path_service.find_path(driver, user1, user2)
+    return path_service.find_path(driver, user1, user2, cache)
 
 
 @router.get(

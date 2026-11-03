@@ -4,6 +4,7 @@ import pytest
 
 from app.domain.errors import AppError
 from app.repositories import graph_repo
+from app.services.cache_service import PathCacheLookup
 from app.services import path_service, recommendation_service
 from tests.support.oracle import bfs_shortest_path
 
@@ -160,6 +161,116 @@ def test_no_path_within_bound_uses_path_not_found_code(monkeypatch):
         path_service.find_path(object(), "a", "b")
 
     assert (error.value.code, error.value.status) == ("PATH_NOT_FOUND", 404)
+
+
+def test_path_cache_hit_is_oriented_and_skips_path_query(monkeypatch):
+    users = {
+        "a": {"id": "a", "name": "A"},
+        "c": {"id": "c", "name": "C"},
+    }
+    monkeypatch.setattr(
+        path_service.graph_repo, "get_users_by_ids", Mock(return_value=users)
+    )
+    query = Mock()
+    monkeypatch.setattr(path_service.graph_repo, "find_bounded_shortest_path", query)
+    cache = Mock()
+    cache.get_path.return_value = PathCacheLookup(
+        version=3,
+        hit=True,
+        path=[
+            {"id": "c", "name": "C"},
+            {"id": "b", "name": "B"},
+            {"id": "a", "name": "A"},
+        ],
+    )
+
+    result = path_service.find_path(object(), "c", "a", cache)
+
+    assert result["cached"] is True
+    assert [node["id"] for node in result["path"]] == ["c", "b", "a"]
+    assert (result["start_user"], result["end_user"], result["hops"]) == (
+        "c",
+        "a",
+        2,
+    )
+    cache.get_path.assert_called_once_with("c", "a")
+    query.assert_not_called()
+
+
+def test_negative_cache_hit_returns_path_not_found_without_path_query(monkeypatch):
+    monkeypatch.setattr(
+        path_service.graph_repo,
+        "get_users_by_ids",
+        Mock(return_value={"a": {"id": "a"}, "z": {"id": "z"}}),
+    )
+    query = Mock()
+    monkeypatch.setattr(path_service.graph_repo, "find_bounded_shortest_path", query)
+    cache = Mock()
+    cache.get_path.return_value = PathCacheLookup(version=0, hit=True, path=None)
+
+    with pytest.raises(AppError) as error:
+        path_service.find_path(object(), "a", "z", cache)
+
+    assert (error.value.code, error.value.status) == ("PATH_NOT_FOUND", 404)
+    query.assert_not_called()
+
+
+def test_path_miss_stores_positive_result_under_observed_version(monkeypatch):
+    driver = object()
+    result_path = [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}]
+    monkeypatch.setattr(
+        path_service.graph_repo,
+        "get_users_by_ids",
+        Mock(return_value={"a": result_path[0], "b": result_path[1]}),
+    )
+    monkeypatch.setattr(
+        path_service.graph_repo,
+        "find_bounded_shortest_path",
+        Mock(return_value=result_path),
+    )
+    cache = Mock()
+    cache.get_path.return_value = PathCacheLookup(version=9, hit=False)
+
+    response = path_service.find_path(driver, "a", "b", cache)
+
+    assert response["cached"] is False
+    cache.set_path.assert_called_once_with("a", "b", result_path, version=9)
+
+
+def test_path_query_failure_is_not_cached(monkeypatch):
+    monkeypatch.setattr(
+        path_service.graph_repo,
+        "get_users_by_ids",
+        Mock(return_value={"a": {"id": "a"}, "b": {"id": "b"}}),
+    )
+    query_error = RuntimeError("database query failed")
+    monkeypatch.setattr(
+        path_service.graph_repo,
+        "find_bounded_shortest_path",
+        Mock(side_effect=query_error),
+    )
+    cache = Mock()
+    cache.get_path.return_value = PathCacheLookup(version=4, hit=False)
+
+    with pytest.raises(RuntimeError, match="database query failed"):
+        path_service.find_path(object(), "a", "b", cache)
+
+    cache.set_path.assert_not_called()
+
+
+def test_unknown_users_are_rejected_before_consulting_path_cache(monkeypatch):
+    monkeypatch.setattr(
+        path_service.graph_repo,
+        "get_users_by_ids",
+        Mock(return_value={"a": {"id": "a"}}),
+    )
+    cache = Mock()
+
+    with pytest.raises(AppError) as error:
+        path_service.find_path(object(), "a", "missing", cache)
+
+    assert error.value.code == "USER_NOT_FOUND"
+    cache.get_path.assert_not_called()
 
 
 def test_recommendations_check_user_before_query_and_include_paging(monkeypatch):
