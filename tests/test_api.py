@@ -1,7 +1,8 @@
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, Mock, call, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from neo4j.exceptions import Neo4jError
 
 from app.api.deps import get_current_user
 from app.core.security import create_access_token
@@ -229,7 +230,14 @@ def test_profile_update_changes_name_only(authenticated_client):
 
 
 def test_protected_user_routes_reject_missing_token():
-    for path in ("/api/v1/users/me", "/api/v1/users/x", "/api/v1/users/search?q=ab"):
+    for path in (
+        "/api/v1/users/me",
+        "/api/v1/users/x",
+        "/api/v1/users/search?q=ab",
+        "/api/v1/path/a/b",
+        "/api/v1/suggestions/me",
+        "/api/v1/users/a/suggestions",
+    ):
         response = client.get(path)
         assert response.status_code == 401
         assert response.json()["error"]["code"] == "UNAUTHENTICATED"
@@ -256,31 +264,78 @@ def test_current_user_rejects_non_object_jwt_payload(monkeypatch):
     assert response.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
-def test_legacy_path_endpoint_remains_functional(authenticated_client):
-    cached = {
+def test_path_endpoint_returns_named_nodes_from_path_service(authenticated_client):
+    path = {
         "start_user": "0",
         "end_user": "150",
-        "path": ["0", "107", "150"],
+        "path": [
+            {"id": "0", "name": "User 0"},
+            {"id": "107", "name": "User 107"},
+            {"id": "150", "name": "User 150"},
+        ],
         "hops": 2,
         "cached": False,
     }
     with patch(
-        "app.services.pathfinder.redis_cache.get_cached_path", return_value=cached
-    ):
+        "app.api.routes_graph.path_service.find_path", return_value=path
+    ) as find_path:
         response = authenticated_client.get("/api/v1/path/0/150")
     assert response.status_code == 200
-    assert response.json()["cached"] is True
-    assert response.json()["path"] == ["0", "107", "150"]
+    assert response.json()["cached"] is False
+    assert response.json()["path"][0] == {"id": "0", "name": "User 0"}
+    find_path.assert_called_once_with(ANY, "0", "150")
 
 
-def test_legacy_suggestions_endpoint_remains_functional(authenticated_client):
+@pytest.mark.parametrize(
+    ("neo4j_code", "expected_status", "expected_code"),
+    [
+        ("Neo.ClientError.Transaction.TransactionTimedOut", 504, "UNAVAILABLE"),
+        ("Neo.ClientError.Statement.SyntaxError", 500, "INTERNAL"),
+    ],
+)
+def test_path_query_timeout_maps_to_gateway_timeout_only(
+    authenticated_client, monkeypatch, neo4j_code, expected_status, expected_code
+):
+    timeout = Neo4jError._hydrate_neo4j(
+        code=neo4j_code, message="database error for test"
+    )
+    monkeypatch.setattr(
+        "app.api.routes_graph.path_service.find_path", Mock(side_effect=timeout)
+    )
+
+    response = authenticated_client.get("/api/v1/path/start/end")
+
+    assert isinstance(timeout, Neo4jError)
+    if neo4j_code == "Neo.ClientError.Transaction.TransactionTimedOut":
+        assert type(timeout).__name__ == "ClientError"
+    assert response.status_code == expected_status
+    assert response.json()["error"]["code"] == expected_code
+
+
+def test_suggestions_routes_use_paged_recommendation_service(authenticated_client):
+    suggestions = {
+        "user_id": "test-user",
+        "suggestions": [{"user_id": "friend", "name": "Friend", "mutual_friends": 3}],
+        "limit": 5,
+        "offset": 2,
+    }
     with patch(
-        "app.services.pathfinder.graph_repo.get_friend_suggestions",
-        return_value=[("friend", 3)],
-    ):
-        response = authenticated_client.get("/api/v1/suggestions/0")
+        "app.api.routes_graph.recommendation_service.get_suggestions",
+        return_value=suggestions,
+    ) as get_suggestions:
+        response = authenticated_client.get("/api/v1/suggestions/me?limit=5&offset=2")
+        other = authenticated_client.get(
+            "/api/v1/users/target/suggestions?limit=5&offset=2"
+        )
     assert response.status_code == 200
-    assert response.json()["suggestions"][0]["user_id"] == "friend"
+    assert response.json()["suggestions"][0]["name"] == "Friend"
+    assert response.json()["limit"] == 5
+    assert other.status_code == 200
+    assert get_suggestions.call_args_list == [
+        call(ANY, "test-user", offset=2, limit=5),
+        call(ANY, "target", offset=2, limit=5),
+    ]
+    assert client.get("/api/v1/suggestions/target").status_code == 404
 
 
 def test_friend_route_remains_scoped_to_authenticated_caller(authenticated_client):

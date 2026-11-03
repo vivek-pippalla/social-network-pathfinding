@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from neo4j.exceptions import ServiceUnavailable, SessionExpired
+from neo4j.exceptions import Neo4jError, ServiceUnavailable, SessionExpired
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.domain.errors import AppError
@@ -95,6 +95,21 @@ def install_exception_handlers(app: FastAPI) -> None:
         return _error(
             request, "UNAVAILABLE", "A required service is unavailable.", status=503
         )
+
+    @app.exception_handler(Neo4jError)
+    async def neo4j_query_error_handler(request: Request, exc: Neo4jError):
+        if exc.code == "Neo.ClientError.Transaction.TransactionTimedOut":
+            return _error(
+                request,
+                "UNAVAILABLE",
+                "The database query timed out.",
+                status=504,
+            )
+        logger.error(
+            "Unhandled Neo4j application error",
+            extra={"request_id": getattr(request.state, "request_id", "-")},
+        )
+        return _error(request, "INTERNAL", "An internal error occurred.", status=500)
 
     @app.exception_handler(Exception)
     async def unexpected_handler(request: Request, exc: Exception):

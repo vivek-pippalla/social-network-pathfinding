@@ -3,6 +3,78 @@ from neo4j import Driver, Query
 from app.core.config import settings
 
 
+def get_users_by_ids(driver: Driver, user_ids: list[str]) -> dict[str, dict]:
+    """Return public User projections for the requested IDs in one read tx."""
+    with driver.session() as session:
+        records = session.execute_read(
+            lambda tx: list(
+                tx.run(
+                    Query(
+                        """
+                        MATCH (u:User)
+                        WHERE u.id IN $user_ids
+                        RETURN u.id AS id, u.name AS name
+                        """,
+                        timeout=settings.NEO4J_QUERY_TIMEOUT_SECONDS,
+                    ),
+                    user_ids=user_ids,
+                )
+            )
+        )
+    return {record["id"]: dict(record) for record in records}
+
+
+def find_bounded_shortest_path(
+    driver: Driver, start_id: str, end_id: str, max_depth: int
+) -> list[dict] | None:
+    """Find a shortest path no longer than max_depth, including public names."""
+    if isinstance(max_depth, bool) or not isinstance(max_depth, int) or max_depth < 1:
+        raise ValueError("max_depth must be a positive integer")
+    depth = int(max_depth)
+    query = Query(
+        f"""
+        MATCH (a:User {{id: $start_id}}), (b:User {{id: $end_id}})
+        MATCH path = shortestPath((a)-[:CONNECTED*..{depth}]-(b))
+        RETURN [node IN nodes(path) | {{id: node.id, name: node.name}}] AS path
+        """,
+        timeout=settings.NEO4J_QUERY_TIMEOUT_SECONDS,
+    )
+    with driver.session() as session:
+        record = session.execute_read(
+            lambda tx: tx.run(query, start_id=start_id, end_id=end_id).single()
+        )
+    return record["path"] if record else None
+
+
+def get_recommendations(
+    driver: Driver, user_id: str, offset: int = 0, limit: int = 20
+) -> list[dict]:
+    """Return paged friend-of-friend candidates with distinct mutual counts."""
+    query = Query(
+        """
+        MATCH (u:User {id: $user_id})-[:CONNECTED]-(friend:User)-[:CONNECTED]-(candidate:User)
+        WHERE candidate <> u AND NOT (u)-[:CONNECTED]-(candidate)
+        RETURN candidate.id AS user_id, candidate.name AS name,
+               count(DISTINCT friend) AS mutual_friends
+        ORDER BY mutual_friends DESC, user_id ASC
+        SKIP $offset LIMIT $limit
+        """,
+        timeout=settings.NEO4J_QUERY_TIMEOUT_SECONDS,
+    )
+    with driver.session() as session:
+        records = session.execute_read(
+            lambda tx: list(
+                tx.run(
+                    query,
+                    user_id=user_id,
+                    offset=offset,
+                    limit=limit,
+                )
+            )
+        )
+    return [dict(record) for record in records]
+
+
 def canonical_pair(user_id_1: str, user_id_2: str) -> tuple[str, str]:
     """Return the one stored ordering for an undirected friendship."""
     return tuple(sorted((user_id_1, user_id_2)))
@@ -143,44 +215,3 @@ def mutual_friends(
             limit,
             settings.NEO4J_QUERY_TIMEOUT_SECONDS,
         )
-
-
-def find_shortest_path(driver: Driver, start_id: str, end_id: str) -> list[str] | None:
-    with driver.session() as session:
-        record = session.execute_read(
-            lambda tx: tx.run(
-                Query(
-                    """
-                MATCH (a:User {id: $start}), (b:User {id: $end})
-                MATCH path = shortestPath((a)-[:CONNECTED*]-(b))
-                RETURN [node IN nodes(path) | node.id] AS path
-                """,
-                    timeout=settings.NEO4J_QUERY_TIMEOUT_SECONDS,
-                ),
-                start=start_id,
-                end=end_id,
-            ).single()
-        )
-    return record["path"] if record else None
-
-
-def get_friend_suggestions(driver: Driver, user_id: str) -> list[tuple]:
-    with driver.session() as session:
-        records = session.execute_read(
-            lambda tx: list(
-                tx.run(
-                    Query(
-                        """
-                    MATCH (u:User {id: $id})-[:CONNECTED]-(friend)-[:CONNECTED]-(fof:User)
-                    WHERE fof.id <> $id AND NOT (u)-[:CONNECTED]-(fof)
-                    RETURN fof.id AS suggested_user, count(DISTINCT friend) AS mutual_count
-                    ORDER BY mutual_count DESC, suggested_user ASC
-                    LIMIT 10
-                    """,
-                        timeout=settings.NEO4J_QUERY_TIMEOUT_SECONDS,
-                    ),
-                    id=user_id,
-                )
-            )
-        )
-    return [(record["suggested_user"], record["mutual_count"]) for record in records]

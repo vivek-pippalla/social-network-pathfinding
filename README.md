@@ -34,7 +34,7 @@ Built with **FastAPI**, **Neo4j**, and **Redis**, backed by the real-world [Stan
 
 ## Overview
 
-Given two user IDs, the engine computes the shortest path through the social graph using Neo4j's built-in **bidirectional BFS** (`shortestPath()`). Results are cached in Redis using order-independent keys so repeated queries return in under 10 ms.
+Given two user IDs, the engine computes a bounded shortest path through the social graph using Neo4j's built-in `shortestPath()`. Path caching and its performance have not yet been implemented or measured; Redis path caching is planned for Phase 6.
 
 The system also provides **"People You May Know"** recommendations — ranking friend-of-friend suggestions by mutual friend count using the Triadic Closure algorithm — available through an authenticated endpoint for any user and a personalized `/me` endpoint derived from your JWT token.
 
@@ -45,7 +45,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
 | Domain | Feature | Description |
 |---|---|---|
 | **Graph Algorithm** | **Shortest Path** | Bidirectional BFS with hop counts between any two nodes in <150 ms |
-| **Caching** | **Redis Cache-Aside** | Order-independent cache keys (`path:min:max`); cache hits return in <10 ms |
+| **Caching** | **Planned for Phase 6** | Redis cache-aside with graph-version invalidation; not implemented yet |
 | **Recommendations** | **Friend Suggestions** | Triadic closure ranking friends-of-friends by mutual connections |
 | **Cloud Storage** | **S3 Dataset Ingestion** | Robust, private S3 ingestion with data validation and URL/local fallbacks |
 | **Security & Config** | **Host Secret Isolation** | Protected `.env.prod` (chmod 600) outside Git; unexposed internal database ports |
@@ -60,7 +60,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
 
 ### Core Application
 - **Language & Framework:** Python 3.11, FastAPI, Pydantic v2
-- **Databases:** Neo4j 5.12 (Graph DB), Redis 7 (In-Memory Cache)
+- **Databases:** Neo4j 5.12 (Graph DB), Redis 7 (rate limiting; path cache planned for Phase 6)
 - **Security:** JWT (python-jose), bcrypt (passlib)
 - **Monitoring:** Prometheus, Grafana, Vis.js graph UI
 
@@ -97,7 +97,7 @@ The system also provides **"People You May Know"** recommendations — ranking f
  │  │   │ Docker Network: internal-network (Bridge)                              │   │   │
  │  │   │                                                                        │   │   │
  │  │   │   ┌────────────────────────┐        ┌───────────────────────────────┐  │   │   │
- │  │   │   │   FastAPI App (ECR)    │───────▶│      Redis 7 Cache (LRU)      │  │   │   │
+ │  │   │   │   FastAPI App (ECR)    │───────▶│   Redis 7 (rate limiting)     │  │   │   │
  │  │   │   │   (Internal port 5000) │        │      (Internal port 6379)     │  │   │   │
  │  │   │   └──────────┬─────────────┘        │      (Shielded from Host)     │  │   │   │
  │  │   │              │                      └───────────────────────────────┘  │   │   │
@@ -143,23 +143,24 @@ The system also provides **"People You May Know"** recommendations — ranking f
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Application health check |
+| `GET` | `/health/ready` | Dependency readiness check |
 | `POST` | `/api/v1/auth/register` | Register new user account (returns JWT) |
 | `POST` | `/api/v1/auth/token` | Login via OAuth2 password flow (returns JWT) |
-| `GET` | `/api/v1/users/{user_id}` | Retrieve public user profile |
-| `GET` | `/api/v1/users/search?q=` | Search user profiles by name |
-| `POST` | `/api/v1/users/` | Create a user without a password |
 
 ### Protected Endpoints (Bearer JWT Required)
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/path/{user1}/{user2}` | Shortest path between two users (cached in Redis) |
-| `GET` | `/api/v1/suggestions/{user_id}` | Friend-of-friend suggestions for any user ID |
-| `GET` | `/api/v1/suggestions/me` | Personalized friend suggestions for authenticated user |
+| `GET` | `/api/v1/users/{user_id}` | Retrieve public user profile |
+| `GET` | `/api/v1/users/search?q=` | Search user profiles by name |
+| `GET` | `/api/v1/path/{user1}/{user2}` | Bounded shortest path between two users |
+| `GET` | `/api/v1/users/{user_id}/suggestions` | Paged friend-of-friend suggestions for a user |
+| `GET` | `/api/v1/suggestions/me` | Paged suggestions for the authenticated user |
 | `GET` | `/api/v1/users/me` | Retrieve authenticated user's profile |
 | `PUT` | `/api/v1/users/me` | Update authenticated user's profile |
-| `POST` | `/api/v1/connections` | Create a friendship connection between two users |
-| `POST` | `/friends/{friend_id}` | Add a friend to authenticated user |
-| `DELETE` | `/friends/{friend_id}` | Remove a friend connection |
+| `GET` | `/api/v1/friends` | List authenticated user's friends |
+| `POST` | `/api/v1/friends/{friend_id}` | Add a friend to authenticated user |
+| `DELETE` | `/api/v1/friends/{friend_id}` | Remove a friend connection |
+| `GET` | `/api/v1/users/{user_id}/mutual` | List mutual friends with a user |
 
 ---
 
@@ -207,7 +208,7 @@ pytest tests/ -v
 
 **Test Coverage Highlights:**
 - **API routes & Auth:** JWT encoding/decoding, token expiry, password hashing, 401 guards, friend management.
-- **Graph & Cache-aside:** Redis cache hits, Neo4j cache misses, hop counts.
+- **Graph & pathfinding:** Neo4j path queries and hop counts. Redis path caching is planned for Phase 6.
 - **S3 Dataset Pipeline:** S3 downloads, ClientError handling, record validation, URL fallbacks, production failure enforcement.
 - **CloudWatch Logging:** Handler attachment, duplicate prevention, structured JSON formatting.
 - **Deployment & Rollback Logic:** Success states, healthcheck timeout, automated rollback restoration, critical rollback failure reporting.

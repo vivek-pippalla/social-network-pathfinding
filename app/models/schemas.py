@@ -53,10 +53,15 @@ class MutualFriendsPage(BaseModel):
 # ─── Pathfinding ─────────────────────────────────────────────────────────────
 
 
+class PathNode(BaseModel):
+    id: str
+    name: str
+
+
 class PathResponse(BaseModel):
     start_user: str
     end_user: str
-    path: list[str]
+    path: list[PathNode]
     hops: int
     cached: bool
 
@@ -66,12 +71,15 @@ class PathResponse(BaseModel):
 
 class SuggestedUser(BaseModel):
     user_id: str
+    name: str
     mutual_friends: int
 
 
 class SuggestionResponse(BaseModel):
     user_id: str
     suggestions: list[SuggestedUser]
+    limit: int
+    offset: int
 
 
 # ─── Authentication ──────────────────────────────────────────────────────────

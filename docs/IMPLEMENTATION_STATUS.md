@@ -4,9 +4,9 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-4-users-friendship (stacked from Phase 3; main unchanged)
+- **Working branch:** phase-5-pathfinding-recommendations (stacked from Phase 4; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 4 — users and friendship
+- **Current phase:** Phase 5 — pathfinding and recommendations
 - **Overall status:** In progress
 - **Last verified update:** 2026-11-03
 
@@ -18,7 +18,8 @@
 | Phase 1: Application foundation | Complete locally; awaiting user review | Stacked from Phase 0; local acceptance checks recorded below; no commit created |
 | Phase 2: Graph schema and real-infrastructure test harness | Implemented and committed; integration verification deferred | Commit 6bb16bb on phase-2-graph-schema-test-harness; user directed deferral until environment setup is complete |
 | Phase 3: Authentication and authorisation | Implemented and committed; real-service verification deferred | Commit f1caf0a on phase-3-authentication-authorization; real Neo4j/Redis checks remain unverified |
-| Phase 4: Users and friendship | Implementation in progress; real-service verification deferred | Local checks recorded below; concurrency, query-plan, and self-loop behavior remain unverified |
+| Phase 4: Users and friendship | Implemented and committed; real-service verification deferred | Commit 5058eff on phase-4-users-friendship; concurrency, query-plan, and self-loop behavior remain unverified |
+| Phase 5: Pathfinding and recommendations | Implementation in progress; real-service verification deferred | Local checks recorded below; path oracle and live recommendation/query behavior remain unverified |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -80,8 +81,14 @@ For each phase, append:
 - **Unverified:** Real Neo4j/Redis integration suite, including concurrent registration and the deliberate dropped-constraint mutation check, was not run per user direction to defer real-service verification. Docker/Bash were not invoked.
 
 ### Phase 4
-- **Status:** Implementation in progress on phase-4-users-friendship, based on Phase 3 commit f1caf0a.
+- **Status:** Implemented and committed on phase-4-users-friendship, based on Phase 3 commit f1caf0a.
 - **Implemented:** Canonical friendship repository operations with managed transactions and query timeouts; service-level self/unknown-user rules and post-commit change hook; versioned friend list/add/remove/mutual routes; user profile/search delegation through services; indexed name search and ID validation; unit and real-service integration tests.
 - **Local checks:** Ruff lint and format passed; `pytest -q -m "not integration and not e2e"` passed (101 passed, 20 deselected); integration collection found 20 tests. `git diff --check` passed.
 - **Unverified:** No real Neo4j/Redis integration tests were executed per the prior deferral. The 50-way friendship concurrency result, text-index query plan, and Neo4j self-loop `MERGE` behavior require the dedicated integration services.
 - **Dependency audit:** `pip-audit -r requirements.txt --cache-dir <temporary cache>` reported no known vulnerabilities.
+
+### Phase 5
+- **Status:** Implementation in progress on phase-5-pathfinding-recommendations, based on Phase 4 commit 5058eff.
+- **Implemented:** Bounded Neo4j path queries and path/recommendation services; named path nodes; authenticated paged suggestion routes; deterministic distinct-mutual recommendations; Neo4j transaction-timeout error mapping; BFS oracle, randomized real-service tests, and a no-seeding HTTP benchmark script.
+- **Local checks:** Ruff lint and format passed; `pytest -q -m "not integration and not e2e"` passed (117 passed, 25 deselected); integration collection found 25 tests; benchmark target-redaction tests passed; `benchmarks/bench_paths.py --help` passed; `pip-audit -r requirements.txt` reported no known vulnerabilities; `git diff --check` passed.
+- **Unverified:** Real Neo4j/Redis tests were not run under the existing deferral, including 200-graph oracle comparison, bounded shortest-path behavior, recommendation distinctness/paging, and the 1,000-degree hub query. The timeout response was tested with the installed driver’s hydrated `ClientError`; no timeout was induced against a live Neo4j server. The benchmark was not run against a live stack, so no latency results are claimed.
