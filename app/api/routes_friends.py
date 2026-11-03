@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from neo4j import Driver
 
-from app.core.auth import get_current_user
+from app.api.deps import get_current_user
 from app.db.neo4j_db import get_driver
 from app.models.schemas import ConnectionResponse
 from app.repositories import graph_repo, user_repo

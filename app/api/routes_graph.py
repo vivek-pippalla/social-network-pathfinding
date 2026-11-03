@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from neo4j import Driver
 
-from app.core.auth import get_current_user
+from app.api.deps import get_current_user
 from app.db.neo4j_db import get_driver
-from app.models.schemas import ConnectionCreate, ConnectionResponse, PathResponse, SuggestionResponse
+from app.models.schemas import PathResponse, SuggestionResponse
 from app.repositories import graph_repo
 from app.services import pathfinder
 
@@ -47,18 +47,3 @@ def get_suggestions(
     current_user: dict = Depends(get_current_user),
 ):
     return pathfinder.get_suggestions(driver, user_id)
-
-
-@router.post(
-    "/connections",
-    response_model=ConnectionResponse,
-    status_code=201,
-    summary="Create a connection between two users (protected)",
-)
-def create_connection(
-    conn: ConnectionCreate,
-    driver: Driver = Depends(get_driver),
-    current_user: dict = Depends(get_current_user),
-):
-    graph_repo.create_connection(driver, conn.user_id_1, conn.user_id_2)
-    return {"message": f"Connection created between {conn.user_id_1} and {conn.user_id_2}."}

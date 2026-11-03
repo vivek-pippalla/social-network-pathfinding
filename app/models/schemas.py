@@ -1,26 +1,21 @@
-from typing import Optional
-from pydantic import BaseModel
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 # ─── User ────────────────────────────────────────────────────────────────────
 
-class UserCreate(BaseModel):
-    name: str
-    email: Optional[str] = None
-
-
-class UserResponse(BaseModel):
+class PublicUserResponse(BaseModel):
     id: str
     name: str
-    email: Optional[str] = None
+    source: str = "snap"
+
+
+class OwnProfileResponse(PublicUserResponse):
+    email: EmailStr
 
 
 # ─── Connection ──────────────────────────────────────────────────────────────
-
-class ConnectionCreate(BaseModel):
-    user_id_1: str
-    user_id_2: str
-
 
 class ConnectionResponse(BaseModel):
     message: str
@@ -51,20 +46,40 @@ class SuggestionResponse(BaseModel):
 # ─── Authentication ──────────────────────────────────────────────────────────
 
 class UserRegister(BaseModel):
-    name: str
-    email: str
-    password: str
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=128)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def trim_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def password_must_differ_from_identity(self):
+        if self.password.casefold() in {
+            str(self.email).casefold(),
+            self.name.casefold(),
+        }:
+            raise ValueError("password must differ from email and name")
+        return self
 
 
 class ProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def trim_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class Token(BaseModel):
     access_token: str
-    token_type: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
 
 
-class TokenData(BaseModel):
-    user_id: Optional[str] = None
+UserResponse = PublicUserResponse

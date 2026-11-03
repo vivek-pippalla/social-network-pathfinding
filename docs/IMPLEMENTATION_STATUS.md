@@ -4,11 +4,11 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-2-graph-schema-test-harness (stacked from Phase 1; main unchanged)
+- **Working branch:** phase-3-authentication-authorization (stacked from Phase 2; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 2 — graph schema and real-infrastructure test harness
+- **Current phase:** Phase 3 — authentication and authorisation
 - **Overall status:** In progress
-- **Last verified update:** 2026-11-02
+- **Last verified update:** 2026-11-03
 
 ## Phase checklist
 
@@ -16,8 +16,8 @@
 |---|---|---|
 | Phase 0: baseline, cleanup, dependency refresh | Complete locally; final review pending | Pushed branch remains unmerged by plan; final integrated review and merge are deferred until all phases are complete |
 | Phase 1: Application foundation | Complete locally; awaiting user review | Stacked from Phase 0; local acceptance checks recorded below; no commit created |
-| Phase 2: Graph schema and real-infrastructure test harness | Implementation complete; integration verification deferred | User directed deferral until environment setup is complete |
-| Phase 3: Authentication and authorisation | Not started | Begin only after Phase 2 is committed and reviewed |
+| Phase 2: Graph schema and real-infrastructure test harness | Implemented and committed; integration verification deferred | Commit 6bb16bb on phase-2-graph-schema-test-harness; user directed deferral until environment setup is complete |
+| Phase 3: Authentication and authorisation | Implementation in progress; integration verification deferred | Local checks are green; real Neo4j/Redis acceptance items remain unverified |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -71,3 +71,9 @@ For each phase, append:
 - **Implemented:** Schema bootstrap, AUTO_SCHEMA lifespan hook, isolated test Compose stack and helper, real-service pytest fixtures/tests, and CI integration job.
 - **Checks previously run:** Ruff check/format passed; 75 non-integration tests passed; full suite 75 passed and 5 integration tests skipped. Integration tests were not verified against live services. Docker/Bash access errors are documented; do not retry in this phase.
 - **Known:** Real Neo4j and Redis behavior remains unverified until environment setup is complete.
+
+### Phase 3
+- **Status:** In progress on phase-3-authentication-authorization, stacked on Phase 2 commit 6bb16bb.
+- **Implemented:** PyJWT/Argon2id account flow; separate Account/User creation transaction; normalized unique email handling; registration validation; dummy-hash login; Redis rate limiting; current-user existence check; private/public profile separation; removed open user creation and arbitrary connection routes; authentication tests and SECURITY.md draft.
+- **Checks:** Ruff check passed; Ruff format check passed (40 files); non-integration suite passed (93 passed, 13 integration cases deselected, no warnings); full pip-audit runtime dependency graph reported no known vulnerabilities.
+- **Unverified:** Real Neo4j/Redis integration suite, including concurrent registration and the deliberate dropped-constraint mutation check, was not run per user direction to defer real-service verification. Docker/Bash were not invoked.

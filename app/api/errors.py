@@ -36,7 +36,14 @@ def _error(
 def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError):
-        return _error(request, exc.code, exc.message, exc.details, exc.status)
+        return _error(
+            request,
+            exc.code,
+            exc.message,
+            exc.details,
+            exc.status,
+            headers=exc.headers,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(request: Request, exc: RequestValidationError):

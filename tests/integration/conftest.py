@@ -3,7 +3,11 @@ import os
 import pytest
 import redis
 from neo4j import GraphDatabase
+from fastapi.testclient import TestClient
 
+from app.core.config import get_settings
+from app.db.neo4j_db import get_driver
+from app.db.redis_cache import get_client
 from app.db.schema import ensure_schema
 
 
@@ -50,3 +54,22 @@ def clean_graph(neo4j_driver, redis_client):
     ensure_schema(neo4j_driver)
     redis_client.flushdb()
     yield neo4j_driver, redis_client
+
+
+@pytest.fixture
+def api_client(clean_graph):
+    """Build an API instance wired to the real, isolated integration services."""
+    driver, redis_client = clean_graph
+    from app.main import create_app
+
+    application = create_app(
+        get_settings().model_copy(update={"AUTO_SCHEMA": False}),
+        driver_provider=lambda: driver,
+        redis_provider=lambda: redis_client,
+        driver_closer=lambda: None,
+    )
+    application.dependency_overrides[get_driver] = lambda: driver
+    application.dependency_overrides[get_client] = lambda: redis_client
+    with TestClient(application) as client:
+        yield client
+    application.dependency_overrides.clear()
