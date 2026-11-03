@@ -1,0 +1,28 @@
+services:
+  api:
+    ports:
+      - "127.0.0.1:5000:5000"
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --reload
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - ${TRUSTED_PROXY_ADDRESSES:-127.0.0.1,::1}
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+      - ./scripts:/app/scripts
+
+  neo4j:
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"

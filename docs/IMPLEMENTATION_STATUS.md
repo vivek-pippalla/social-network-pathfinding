@@ -4,11 +4,11 @@
 
 ## Project controls
 - **Master plan:** `BUILD_PLAN.md` — Social Network Pathfinding: Reconstruction Blueprint
-- **Working branch:** phase-10-observability (stacked on Phase 9 commit 9c9ab34; main unchanged)
+- **Working branch:** phase-11-docker-local-deployment (stacked on Phase 10 commit 6c6b82f; main unchanged)
 - **Protected baseline:** `main` — do not modify directly
-- **Current phase:** Phase 10 — Observability
+- **Current phase:** Phase 11 — Docker and local deployment
 - **Overall status:** In progress
-- **Last verified update:** 2026-11-03
+- **Last verified update:** 2026-11-04
 
 ## Phase checklist
 
@@ -24,7 +24,8 @@
 | Phase 7: Dataset ingestion | Implemented and committed; real-service verification deferred | Commit 563e037 on phase-7-dataset-ingestion; checksum and parser checks passed, real graph ingestion remains unverified |
 | Phase 8: API completion and contract | Implemented and committed | Commit cf8c32f on phase-8-api-completion; API contract and local checks recorded below |
 | Phase 9: Frontend reconstruction | Implemented and committed | Commit 9c9ab34 on phase-9-frontend-reconstruction; browser E2E and real-service verification remain deferred |
-| Phase 10: Observability | In progress | Application metrics, structured safe events, internal-only metrics access, and the monitoring profile are being verified locally |
+| Phase 10: Observability | Implemented and committed | Commit 6c6b82f on `phase-10-observability`; local tests passed, live monitoring and real-service checks remain unverified |
+| Phase 11: Docker and local deployment | Implemented locally; pending review | Branch `phase-11-docker-local-deployment`, stacked on Phase 10 commit 6c6b82f; live Docker checks remain unverified |
 
 Status values: `Not started`, `In progress`, `Blocked`, `Complete`, `Deferred / optional`.
 
@@ -127,7 +128,15 @@ For each phase, append:
 - **Manual accessibility checklist (not completed):** tab through sign-in/register, each navigation item and all forms; verify focus moves to each screen heading; confirm focus indicators and live announcements; operate suggestions, friend controls, mutual view and graph without a mouse; inspect a 375px-wide viewport; check graph labels and path text with a screen reader; verify reduced-motion behavior and color contrast.
 
 ### Phase 10
-- **Status:** In progress on `phase-10-observability`, stacked on Phase 9 commit `9c9ab34`; uncommitted pending review.
+- **Status:** Implemented and committed on `phase-10-observability`, stacked on Phase 9 commit `9c9ab34`; commit `6c6b82f`.
 - **Implemented:** Prometheus counters and histograms for cache, path, friendship, authentication, rate limiting, and Neo4j repository operations; structured safe domain events with HMAC email identifiers; source-IP-based `/metrics` access limited to loopback and private network peers (forwarded headers are ignored); development API and monitoring ports bind to localhost; Caddy denies `/metrics` before proxying public traffic; Prometheus/Grafana monitoring profile, provisioned datasource/dashboard, and environment-supplied Grafana credentials with empty and example-placeholder startup guards.
 - **Local checks:** Ruff lint passed; Ruff format check passed (61 files); `scripts/export_openapi.py --check` passed; `pytest -q -m "not integration and not e2e" -k "not test_docker_compose_config_validation"` passed (158 passed, 1 skipped, 37 deselected); Compose/Caddy configuration unit checks ran in that suite; `git diff --check` passed; `pip-audit -r requirements.txt` passed with no known vulnerabilities during implementation. The Docker-dependent Compose test was excluded by request.
-- **Unverified:** Real Neo4j/Redis integration remains deferred under the existing environment agreement. Docker Compose is installed, but `docker info` could not access the Docker engine named pipe (permission denied), so the monitoring profile and Caddy proxy were not started; no live dashboard panels or proxy behavior were observed. The Compose CLI config check was not rerun after review fixes. Caddy denial is covered by a static configuration assertion only.
+- **Unverified:** Real Neo4j/Redis integration remains deferred under the existing environment agreement. Docker Compose is installed, but `docker info` could not access the Docker engine named pipe (permission denied), so the monitoring profile and Caddy proxy were not started; no live dashboard panels or proxy behavior were observed. Caddy denial is covered by a static configuration assertion only.
+
+### Phase 11
+- **Status:** Implementation complete locally on `phase-11-docker-local-deployment`, stacked on Phase 10 commit `6c6b82f`; uncommitted pending review.
+- **Implemented:** Rebuilt the runtime Dockerfile around `requirements.txt`, a pinned Python base, a non-root user, configurable `WEB_CONCURRENCY`, explicit Uvicorn proxy trust, and `/health`. Split base Compose from the loopback-only development override; added prod-like Caddy edge settings, Redis authentication without persistence, Neo4j memory settings, and explicit restart policies. Added local deployment with previous-image rollback, offline Neo4j dump/restore scripts, Compose profile checks, behavior tests using fake Docker/curl, a local deployment README, and this status record. The SNAP archive remains fetched and checksum-verified at ingestion time, and is excluded from the image context under the existing data redistribution decision.
+- **Local checks:** `ruff check .` passed; Ruff format check passed (71 files); non-integration/non-e2e suite passed (156 passed, 9 skipped, 36 deselected); Compose model tests passed for development, monitoring, and prod-like edge configurations; `scripts/export_openapi.py --check` passed with temporary valid settings; `pip-audit -r requirements.txt` passed with no known vulnerabilities; `git diff --check` passed. The three shell syntax tests, four deployment scenarios, and syntax mutation test were authored against the real scripts but skipped because the available Windows `bash.exe` launcher could not execute; the Compose config tests ran successfully without needing the Docker daemon. The remaining skipped test is the browser test because Playwright is not installed.
+- **Neo4j pin decision:** Existing `neo4j:5.12.0` is retained pending approval. Neo4j's release archive lists `5.26.32` (9 October 2026) as the latest 5.x candidate. A Neo4j version change is not made in this phase without explicit approval; back up and test restore before changing it.
+- **Unverified:** `docker info` returned permission denied for `npipe:////./pipe/docker_engine`; no image build, service start, SNAP ingestion, health request, UI login, or backup/restore drill was run. `bash -n` and the behavioral deploy cases skipped because Windows `bash.exe` could not run; `shellcheck` is not installed. The command syntax is linked to the official current Neo4j manual, but the exact behavior against pinned image `5.12.0` was not verified. Playwright/browser and real Neo4j/Redis acceptance checks remain unverified.
+- **Clean-machine commands:** In a fresh clone only, copy `.env.example` to `.env`; generate a 32-byte hex `SECRET_KEY` and independent 24-byte hex `NEO4J_PASSWORD` and `REDIS_PASSWORD` values with `openssl rand -hex 32` / `openssl rand -hex 24`, then replace the placeholders. Run `docker compose config -q`, `docker compose up -d --build`, `docker compose run --rm api python -m app.cli ingest`, and `curl --fail http://127.0.0.1:5000/health/ready`; complete the UI login journey at `http://127.0.0.1:5000/`. Run `bash deploy/local/backup.sh`, then restore only from a dump that may safely replace the current graph with `bash deploy/local/restore.sh <dump-path>` and type the exact confirmation requested. Do not copy over an existing `.env` or use a volume-removal command. The active `.env` and any Docker volumes were not modified here.

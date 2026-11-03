@@ -168,10 +168,8 @@ def test_redis_client_uses_settings_timeouts(monkeypatch):
     }
 
 
-def test_prod_redis_cache_keeps_version_key_out_of_lru_eviction():
-    compose = yaml.safe_load(
-        Path("docker-compose.prod.yml").read_text(encoding="utf-8")
-    )
+def test_redis_cache_keeps_version_key_out_of_lru_eviction():
+    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
     redis_command = compose["services"]["redis"]["command"]
 
     assert (

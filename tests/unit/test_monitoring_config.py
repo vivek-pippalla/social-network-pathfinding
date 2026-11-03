@@ -12,12 +12,16 @@ def test_monitoring_profile_is_local_only_and_grafana_has_no_default_credentials
     prometheus = compose["services"]["prometheus"]
     grafana = compose["services"]["grafana"]
     api = compose["services"]["api"]
+    development_override = yaml.safe_load(
+        (ROOT / "docker-compose.override.yml").read_text(encoding="utf-8")
+    )
 
     assert "monitoring" in prometheus["profiles"]
     assert "monitoring" in grafana["profiles"]
     assert prometheus["ports"] == ["127.0.0.1:9090:9090"]
     assert grafana["ports"] == ["127.0.0.1:3000:3000"]
-    assert api["ports"] == ["127.0.0.1:5000:5000"]
+    assert "ports" not in api
+    assert development_override["services"]["api"]["ports"] == ["127.0.0.1:5000:5000"]
     assert grafana["environment"]["GF_SECURITY_ADMIN_USER"] == "${GRAFANA_ADMIN_USER:-}"
     assert (
         grafana["environment"]["GF_SECURITY_ADMIN_PASSWORD"]
