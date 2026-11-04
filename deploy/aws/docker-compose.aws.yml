@@ -1,0 +1,30 @@
+# ==============================================================================
+# deploy/aws/docker-compose.aws.yml — AWS Overlay Configuration
+# Layered on top of docker-compose.yml and docker-compose.prod.yml through COMPOSE_FILE.
+# ==============================================================================
+
+x-aws-logging: &aws-logging
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION:?set AWS_REGION in .env}
+    awslogs-group: ${CW_LOG_GROUP:-/pathfinding-demo}
+    tag: "{{.Name}}"
+    mode: non-blocking
+    max-buffer-size: 4m
+
+services:
+  api:
+    logging: *aws-logging
+    restart: unless-stopped
+
+  neo4j:
+    logging: *aws-logging
+    restart: unless-stopped
+
+  redis:
+    logging: *aws-logging
+    restart: unless-stopped
+
+  caddy:
+    logging: *aws-logging
+    restart: unless-stopped

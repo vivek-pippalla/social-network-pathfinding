@@ -219,7 +219,7 @@ jobs:
       - name: Build and start the full Compose stack
         run: docker compose up -d --build --wait --wait-timeout 240
       - name: Verify API readiness
-        run: curl --fail --retry 30 --retry-interval 2 --retry-all-errors http://127.0.0.1:5000/health/ready
+        run: curl --fail --retry 30 --retry-delay 2 --retry-all-errors http://127.0.0.1:5000/health/ready
       - name: Run browser smoke journey
         env:
           BASE_URL: http://127.0.0.1:5000

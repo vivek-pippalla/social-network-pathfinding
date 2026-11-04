@@ -32,6 +32,7 @@ Thumbs.db
 !*.env.prod.example
 
 documentation/*
+!documentation/archive/legacy_aws/
 
 docs/*
 !docs/API.md
@@ -41,7 +42,11 @@ docs/*
 !docs/TESTING.md
 !docs/DEPLOYMENT.md
 !docs/IMPLEMENTATION_STATUS.md
+!docs/aws-deployment-demo.md
+!docs/images/aws/
 
 # Test & tool caches
 .pytest_tmp/
 .phase7-pip-audit-cache/
+.venv/
+uv.lock

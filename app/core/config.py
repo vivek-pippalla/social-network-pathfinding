@@ -13,12 +13,16 @@ PLACEHOLDER_SECRETS = {
     "replace-with-at-least-32-random-characters",
     "secret",
     "password",
+    "change_me_generate_on_the_instance",
+    "change-me-generate-on-the-instance",
 }
 PLACEHOLDER_PASSWORDS = {
     "your-neo4j-password-here",
     "password123",
     "password",
     "replace-with-a-private-password",
+    "change_me_generate_on_the_instance",
+    "change-me-generate-on-the-instance",
 }
 EXPLICIT_TEST_SECRET = "test-only-secret-key-32-bytes-minimum"
 

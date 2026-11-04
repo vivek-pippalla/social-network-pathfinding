@@ -1,6 +1,6 @@
 # Inactive legacy AWS deployment guide
 
-This guide and the deployment material in this directory are preserved as historical reference only. They have not been tested since the AWS account closed. Do not use them to deploy. This legacy material is scheduled for deletion in Phase 15.
+This guide and the deployment material in this directory are preserved as historical reference only. In Phase 15, they were moved from `deploy/aws/legacy/` to `documentation/archive/legacy_aws/` so that `deploy/aws/` contains only the modern demonstration kit. They have not been tested since the original AWS account closed. Do not use them to deploy.
 
 ---
 # AWS Production Deployment & Architecture Guide
@@ -244,16 +244,16 @@ When an Ubuntu EC2 instance boots for the first time, `cloud-init` generates uni
    -----END SSH HOST KEY FINGERPRINTS-----
 
    -----BEGIN SSH HOST KEY KEYS-----
-   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... root@ip-172-31-xx-yy
-   ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoY... root@ip-172-31-xx-yy
-   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB... root@ip-172-31-xx-yy
+   ssh-ed25519 <PUBLIC_KEY_BASE64_STRING> root@ip-172-31-xx-yy
+   ecdsa-sha2-nistp256 <PUBLIC_KEY_BASE64_STRING> root@ip-172-31-xx-yy
+   ssh-rsa <PUBLIC_KEY_BASE64_STRING> root@ip-172-31-xx-yy
    -----END SSH HOST KEY KEYS-----
    ```
 
 2. **Step 2 (Method A - Recommended & Direct): Construct Known Hosts from Hypervisor Output:**
    Because the raw public key comes straight from the AWS hypervisor console, you can construct the `known_hosts` entry directly with zero network scanning:
    ```text
-   <EC2_HOST> ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...
+   <EC2_HOST> ssh-ed25519 <PUBLIC_KEY_BASE64_STRING>
    ```
    *(Replace `<EC2_HOST>` with the exact IP or DNS hostname used in `secrets.EC2_HOST`, followed by the exact `ssh-ed25519` key string from `BEGIN SSH HOST KEY KEYS`).*
 
@@ -499,8 +499,8 @@ Configure the following secrets and variables in your GitHub Repository under **
 |---|---|---|
 | `AWS_ROLE_TO_ASSUME` | The ARN of the GitHubActionsECRPushRole | `arn:aws:iam::123456789012:role/GitHubActionsECRPushRole` |
 | `EC2_HOST` | Public IP or DNS of your EC2 instance | `13.233.xx.yy` |
-| `EC2_SSH_PRIVATE_KEY` | Private SSH Key contents (`.pem`) used to connect to EC2 | `-----BEGIN RSA PRIVATE KEY-----...` |
-| `EC2_SSH_KNOWN_HOSTS` | **Mandatory:** Pinned output of `ssh-keyscan -H <EC2_HOST>` verified via console | `|1|... ssh-ed25519 AAAAC3NzaC1...` |
+| `EC2_SSH_PRIVATE_KEY` | Private SSH Key contents (`.pem`) used to connect to EC2 | `<CONTENTS_OF_SSH_PRIVATE_KEY_PEM>` |
+| `EC2_SSH_KNOWN_HOSTS` | **Mandatory:** Pinned output of `ssh-keyscan -H <EC2_HOST>` verified via console | `<PINNED_KNOWN_HOSTS_LINE_FROM_CONSOLE>` |
 | `EC2_USER` | EC2 SSH username (Default: `ubuntu`) | `ubuntu` |
 
 ### Repository Variables
