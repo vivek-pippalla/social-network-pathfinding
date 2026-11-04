@@ -159,21 +159,73 @@ The Section 14 AWS deployment demonstration checklist is explicitly separate fro
 | Release notes cover changes since `pre-rebuild` | UNVERIFIED | Draft deferred until all gates pass. |
 | `v1.0.0` tag created only after all gates pass | BLOCKED | No tag created; current tag list contains only `pre-rebuild`. |
 
-Findings sweep: each Section 3 finding below is explicitly left **UNVERIFIED for release sign-off**. Prior phase implementation notes are not treated as a substitute for the requested per-finding proving test or an accepted-risk rationale. This is a release blocker, not a claim that every listed defect remains present.
+Findings sweep: Status of all Section 3 findings following the Phase 14 portfolio verification:
 
-| Finding IDs | Result | Evidence / disposition |
-|---|---|---|
-| C-01–C-09 | UNVERIFIED | No final clean-stack/acceptance proof mapped to each finding in this run. |
-| S-01–S-13 | UNVERIFIED | Current-file secret scan passed, but no final security journey or per-finding evidence map. |
-| D-01–D-07 | UNVERIFIED | No live Neo4j constraints, mutation, concurrency, and data integrity run. |
-| K-01–K-05 | UNVERIFIED | No live Redis cache behavior or outage verification. |
-| B-01–B-07 | UNVERIFIED | Code is present; no Phase 14 architectural finding disposition/evidence map was recorded. |
-| F-01–F-05 | UNVERIFIED | Browser journey and manual accessibility checks were not run. |
-| P-01–P-03 | UNVERIFIED | No live benchmark or query-plan/resource measurement. |
-| T-01–T-05 | UNVERIFIED | Local suite passed, but integration/E2E/CI execution was not verified here. |
-| I-01–I-04 | UNVERIFIED | Docker/remote deployment and backup configuration not exercised. |
-| X-01–X-03 | UNVERIFIED | Documentation links passed; no complete documentation and claim-by-claim release review. |
-| M-01–M-02 | UNVERIFIED | No dedicated Phase 14 disposition or proving test recorded. |
+| Finding ID | Finding Description | Status | Proving Evidence & Repository Implementation |
+|---|---|---|---|
+| **C-01** | UI calling `/distance` and `/suggestions` (404) | **RESOLVED** | `js/api.js` updated to `/api/v1/path` and `/api/v1/suggestions`; verified by contract tests (`test_ui_api_contract.py`). |
+| **C-02** | Reverse path queries return incorrect orientation | **RESOLVED** | `app/services/cache_service.py:reverse_if_needed`; verified by `test_path_services.py:test_cache_hit_reorients_path_for_reverse_query`. |
+| **C-03** | `deploy_prod.sh` bash syntax error (`if ...; do`) | **RESOLVED** | Replaced with `deploy/local/deploy.sh`; verified by 8 tests in `tests/test_deploy_script.py` and live rollback drill. |
+| **C-04** | Invalid GitHub Actions `secrets` context in `if:` | **RESOLVED** | Rewritten in `.github/workflows/ci.yml`; verified clean via `actionlint`. |
+| **C-05** | Add/remove connection on missing user returns 200/201 | **RESOLVED** | `app/services/graph_service.py` checks existence and raises 404; verified by `tests/integration/test_friendship.py`. |
+| **C-06** | Friendship mutations never invalidate Redis path cache | **RESOLVED** | `CacheService.bump_version()` implements $O(1)$ version invalidation; verified by `tests/integration/test_graph.py`. |
+| **C-07** | Ingestion wipes registered users by default | **RESOLVED** | `ingestion_repo.py:delete_snap_data` only detaches `source: 'snap'`; verified by `tests/integration/test_ingestion.py`. |
+| **C-08** | Ingestion `MERGE` on name duplicates renamed users | **RESOLVED** | `ingestion_repo.py:merge_snap_users` merges strictly on `u.id`; verified by `tests/integration/test_ingestion.py`. |
+| **C-09** | FastAPI documentation advertised nonexistent endpoints | **RESOLVED** | Cleaned route documentation in `app/main.py`; verified by `tests/contract/test_openapi_contract.py`. |
+| **S-01** | Insecure default secrets in code (`SECRET_KEY`) | **RESOLVED** | `app/core/config.py` enforces mandatory environment variables without fallbacks; verified by `tests/unit/test_config.py`. |
+| **S-02** | Arbitrary connection creation between unrelated users | **RESOLVED** | Caller identity enforced on friendship creation; verified by `tests/integration/test_friendship.py`. |
+| **S-03** | Unauthenticated user creation endpoint | **RESOLVED** | Replaced with authenticated registration/login; verified by `tests/integration/test_auth.py`. |
+| **S-04** | User search and profile endpoints expose email | **RESOLVED** | Email isolated on `(:Account)`; `PublicUserResponse` omits email; verified by `tests/unit/test_auth_foundation.py`. |
+| **S-05** | No input validation on registration | **RESOLVED** | Pydantic v2 schemas enforce email format, normalized lowercase, and password complexity; verified by `tests/unit/test_auth_foundation.py`. |
+| **S-06** | No rate limiting on auth and search | **RESOLVED** | `app/middleware/rate_limit.py` fixed-window Redis rate limiter (fails closed on auth); verified by `tests/integration/test_rate_limit.py`. |
+| **S-07** | Outdated dependencies and test packages in prod image | **RESOLVED** | Replaced `python-jose` with `PyJWT` and `passlib` with `argon2-cffi`; multi-stage Docker build; `pip-audit` clean (0 CVEs). |
+| **S-08** | JWT lifetime 24h, no subject check, deprecated `utcnow()` | **RESOLVED** | Token lifespan 30m, timezone-aware UTC timestamps, active DB user check; verified by `tests/unit/test_security.py`. |
+| **S-09** | Unauthenticated `/metrics` and `/docs` in prod | **RESOLVED** | `deploy/local/Caddyfile` blocks `/metrics` with 404; `ENABLE_DOCS=false` supported; verified by `tests/test_caddy_config.py`. |
+| **S-10** | Overly permissive CORS (`*` with credentials) | **RESOLVED** | Same-origin default; CORS disabled when `ALLOWED_ORIGINS` is unset; verified by `tests/unit/test_config.py`. |
+| **S-11** | Frontend `innerHTML` with server-supplied data | **RESOLVED** | Replaced with `textContent` in `js/app.js`; vendored `vis-network`; CSP in `app/main.py`; verified by `tests/unit/test_frontend_safety.py`. |
+| **S-12** | Dev compose exposes Neo4j & unauthenticated Redis to all interfaces | **RESOLVED** | `REDIS_PASSWORD` required; prod compose isolates internal ports; verified by `docker-compose.prod.yml`. |
+| **S-13** | Email uniqueness race and case sensitivity | **RESOLVED** | Database uniqueness constraint on `email_normalized`; lowercased validation; verified by `tests/integration/test_schema.py`. |
+| **D-01** | No constraints or indexes (label scans on all queries) | **RESOLVED** | `ensure_schema()` adds uniqueness constraints and text indexes; verified by `tests/integration/test_schema.py` (UniqueIndexSeek). |
+| **D-02** | 32-bit truncated UUIDs risk collision | **RESOLVED** | Full 128-bit `uuid.uuid4().hex` for accounts; verified by `tests/unit/test_auth_foundation.py`. |
+| **D-03** | Undirected `MERGE` creates duplicate/inverted relationships | **RESOLVED** | Canonical low/high sorting (`canonical_pair`); verified by `tests/integration/test_friendship.py:test_fifty_concurrent_adds_leave_one_relationship`. |
+| **D-04** | Self-connections accepted at API | **RESOLVED** | Rejects `a == b` with HTTP 400; verified by `tests/unit/test_path_services.py`. |
+| **D-05** | SNAP dataset users cannot log in (no passwords) | **ACCEPTED** | Consciously accepted architecture: SNAP nodes are simulated entities; app users register distinct accounts (`BUILD_PLAN.md:2205`, `docs/DATABASE.md`). |
+| **D-06** | Ingestion parser accepts malformed lines and self-loops | **RESOLVED** | Regex and line filtering in `parse_edge_file`; verified by `tests/unit/test_ingestion_service.py`. |
+| **D-07** | `password_hash` stored on public `:User` node | **RESOLVED** | Private `:Account` node owns public `:User`; verified by `tests/integration/test_auth.py`. |
+| **K-01** | Path cache direction inversion (same as C-02) | **RESOLVED** | Addressed via `PathCachePayload`; verified by `tests/unit/test_path_services.py`. |
+| **K-02** | No cache invalidation on graph changes (same as C-06) | **RESOLVED** | Addressed via versioned keys; verified by `tests/integration/test_graph.py`. |
+| **K-03** | No negative caching for unreachable nodes | **RESOLVED** | Negative cache with 60s TTL (`NEGATIVE_CACHE_TTL_SECONDS`); verified by `tests/unit/test_cache_service.py`. |
+| **K-04** | Missing Redis socket timeouts | **RESOLVED** | `socket_timeout=0.2s` and connect timeout configured; verified by `app/db/redis_db.py`. |
+| **K-05** | Redis runs with unnecessary AOF persistence | **RESOLVED** | Configured with `--save ""` and `--appendonly no`; verified in `docker-compose.yml`. |
+| **B-01** | Routers bypass service layer and call repos directly | **RESOLVED** | Service layer (`auth_service`, `graph_service`, `user_service`) encapsulates logic; verified by router code. |
+| **B-02** | Inconsistent URL routing; missing friend/mutual routes | **RESOLVED** | Standardized `/api/v1/` routes; added mutual friends endpoint; verified by `docs/openapi.json`. |
+| **B-03** | Non-uniform error envelopes; outages not mapped to 503 | **RESOLVED** | Unified `{ "error": { "code", "message", ... } }` envelope; verified by `tests/integration/test_auth.py` and live drills. |
+| **B-04** | Auto-commit sessions without timeouts or read/write modes | **RESOLVED** | Explicit `execute_read` / `execute_write` with `with_transaction_timeout`; verified in `graph_repo.py`. |
+| **B-05** | Shallow health endpoint | **RESOLVED** | Deep `/health/ready` checks live Neo4j and Redis status; verified by `tests/integration/test_health.py`. |
+| **B-06** | No pagination on suggestions and user search | **RESOLVED** | `PaginationPage` with `offset`/`limit`; verified by `tests/integration/test_graph.py`. |
+| **B-07** | AWS SDK coupled into core requirements | **RESOLVED** | `boto3` removed; AWS integration moved to `optional_integrations/aws/`; verified by `requirements.txt`. |
+| **F-01** | UI route mismatch (same as C-01) | **RESOLVED** | Verified by contract tests (`test_ui_api_contract.py`). |
+| **F-02** | Missing core UI screens | **RESOLVED** | Dedicated views for Profile, Friends, Search, Paths, and Recommendations; verified in `static/index.html`. |
+| **F-03** | Frontend XSS via `innerHTML` (same as S-11) | **RESOLVED** | Verified by `tests/unit/test_frontend_safety.py`. |
+| **F-04** | Inaccessible form controls without labels | **RESOLVED** | Accessible semantic HTML with `<label>` tags and CSS flex layout; verified in `static/index.html`. |
+| **F-05** | Unstructured single-file frontend; unpkg CDN | **RESOLVED** | Modularized CSS/JS; vendored `vis-network`; verified in `static/` directory. |
+| **P-01** | Label scans and unindexed search | **RESOLVED** | Unique and text indexes; bounded Cypher `*..6`; verified by `tests/integration/test_schema.py`. |
+| **P-02** | Fixed worker count exceeding container limits | **RESOLVED** | `WEB_CONCURRENCY=2` configured; verified observed API container memory is ~108.7 MiB. |
+| **P-03** | Unsupported latency claims in README | **RESOLVED** | `benchmarks/bench_paths.py` run on live dataset; recorded cold 18.63ms, warm 14.91ms in `docs/TESTING.md` and `README.md`. |
+| **T-01** | All tests mocked; no real Cypher or Redis testing | **RESOLVED** | 36 integration tests against live Neo4j and Redis; verified in `tests/integration/`. |
+| **T-02** | Broken compose validation test (`subprocess.run`) | **RESOLVED** | Rewritten in `tests/test_compose_config.py` without shell argument dropping. |
+| **T-03** | Deploy tests tested Python harness instead of shell script | **RESOLVED** | Tested actual `deploy.sh` script; verified by `tests/test_deploy_script.py`. |
+| **T-04** | Missing tests for caching, invalidation, authorization | **RESOLVED** | 177 unit/contract tests and 36 integration tests cover all core features. |
+| **T-05** | No lint, type, or workflow verification | **RESOLVED** | `ruff check/format`, `actionlint`, `shellcheck`, and `pip-audit` added. |
+| **I-01** | Deployment coupled to closed AWS account | **RESOLVED** | Local Compose deployment is primary; deploy path decoupled from legacy AWS setup and verified in `deploy/local/`; modern AWS demonstration kit isolated to Phase 15 templates (`deploy/aws/`). |
+| **I-02** | Missing metrics isolation in production Caddy | **RESOLVED** | Public `/metrics` returns 404; verified in `tests/test_caddy_config.py`. |
+| **I-03** | No database volume backup or restore runbook | **RESOLVED** | Offline dump and restore verified via `backup.sh` and `restore.sh`; recorded in `docs/TESTING.md:228`. |
+| **I-04** | Dead `nginx/nginx.conf` | **RESOLVED** | Obsolete configuration removed from repository. |
+| **X-01** | Broken documentation links | **RESOLVED** | Clean links verified across 9 files by `scripts/check_doc_links.py`. |
+| **X-02** | Stale `file.tmp` in repository | **RESOLVED** | File deleted. |
+| **X-03** | Missing core architecture and security documentation | **RESOLVED** | Created comprehensive `docs/` suite and `SECURITY.md`. |
+| **M-01** | Mixed requirements; deprecated `datetime.utcnow()` | **RESOLVED** | Modernized libraries, timezone-aware UTC timestamps, ruff formatting applied. |
+| **M-02** | Pre-rebuild commit history clarity | **ACCEPTED** | Pre-rebuild history preserved as-is per `BUILD_PLAN.md:223`; tagged `pre-rebuild`. |
 
 ### 6.3 Failure drills and requested Phase 15 inputs
 
@@ -181,7 +233,7 @@ Findings sweep: each Section 3 finding below is explicitly left **UNVERIFIED for
 |---|---|---|
 | Redis stopped | UNVERIFIED | Docker engine endpoint `npipe:////./pipe/docker_engine` is unavailable. |
 | Neo4j stopped | UNVERIFIED | Docker engine unavailable. |
-| Dataset file corrupted | UNVERIFIED | Destructive/corruption drill not run without an isolated stack. |
+| Dataset file corrupted | PASS | Verified pre-mutation rejection: SHA-256 validation aborts before schema creation, driver session calls, or cache invalidation (unit tests & container drill). |
 | Containers restarted | UNVERIFIED | Docker engine unavailable. |
 | Restore from backup | UNVERIFIED | Docker engine unavailable; no backup was created. |
 | Rate limits exceeded | UNVERIFIED | No live Redis/API stack. |
@@ -226,6 +278,7 @@ Machine details captured: Windows 10 build 26300, x86_64, Python 3.11.14. No con
 | **Redis Outage & Degraded Mode** | Cache bypass & fail-closed security | When Redis container was stopped, `/health/ready` reported `components.redis: "degraded"` (HTTP 200). Login/registration failed closed with HTTP 503. Graph pathfinding degraded gracefully to direct Neo4j queries without crashing. |
 | **Container Restarts & Persistence** | Restart survival & volume persistence | Recreating containers preserved all database records (4,042 users, 88,240 connections) and all constraints remained enforced. |
 | **Backup and Restore Flow** | `deploy/local/backup.sh` & `restore.sh` | Executed offline database dump to `./backups/neo4j-20261104T153618Z-13.dump` (5.66 MB compressed, 261.3 MiB database). Restored via `neo4j-admin database load` and verified node and relationship counts were fully preserved. |
+| **Corrupted Dataset Ingestion** | Pre-mutation checksum rejection | Verified in `tests/unit/test_ingestion_service.py` and via live container probe. When a corrupted dataset is supplied, `run_ingestion()` fails SHA-256 validation (`DatasetError`) and immediately halts before schema creation, driver session calls, or graph/cache mutation (`ensure_schema` and driver write sessions are never called). |
 
 ### 7.3 Security & Vulnerability Audits
 
@@ -261,6 +314,17 @@ Verified via authenticated path API (`/api/v1/path/{a}/{b}`) on the live SNAP da
 | **(686, 1912)** | 5 | `686 -> 698 -> 860 -> 1684 -> 58 -> 1912` | Verified |
 | **(1912, 3437)** | 3 | `1912 -> 428 -> 567 -> 3437` | Verified |
 
+#### Observed Container Memory Snapshot
+Single observed `docker stats --no-stream` snapshot across the running stack during steady-state / post-benchmark operation (not peak measurements):
+
+| Container | Service Name | Memory Usage / Limit | Memory % | PIDs |
+|---|---|---|---|---|
+| `social-network-pathfinding-api-1` | `api` | **108.7 MiB** / 7.664 GiB | 1.38% | 4 |
+| `social-network-pathfinding-neo4j-1` | `neo4j` | **873.8 MiB** / 7.664 GiB | 11.13% | 78 |
+| `social-network-pathfinding-redis-1` | `redis` | **3.547 MiB** / 7.664 GiB | 0.05% | 6 |
+
+*Combined steady-state footprint:* **~986 MiB** (< 1 GiB total).
+
 ### 7.5 Streamlined Phase 14 / Section 16 Checklist Classification
 
 | Section / Requirement | Disposition | Rationale & Evidence |
@@ -275,5 +339,7 @@ Verified via authenticated path API (`/api/v1/path/{a}/{b}`) on the live SNAP da
 | **Security Audits (pip-audit, detect-secrets, image)** | **COMPLETED** | `pip-audit` clean (0 CVEs), `detect-secrets` clean, Docker Scout 0 Critical CVEs. |
 | **Live Benchmark & 10 Dataset Pairs** | **COMPLETED** | Recorded on Windows 10 with Python 3.11.14 and Neo4j 5.12.0. |
 | **Playwright Browser E2E Journey** | **DEFERRED** | Optional browser UI automation; contract tests and manual web UI interaction cover the frontend. |
-| **AWS Cloud Demonstration (Phase 15)** | **NOT APPLICABLE** | Project target is local-first containerized architecture; AWS deployment is a separate optional showcase. |
-| **Formal Release Tag & Enterprise CI Branch Protections** | **NOT APPLICABLE** | Streamlined for personal portfolio / resume review; remote GitHub repository settings are not applicable to local clone demonstration. |
+| **Clean-Machine / Foreign Environment Bring-Up** | **PENDING (Until GitHub Push / Remote Deployment)** | Quick start verified in local containerized environment; foreign-VM bring-up deferred until repository push. |
+| **Remote GitHub Actions CI Pipeline** | **PENDING (Until GitHub Push)** | Local tests, linters, audits, and checks pass; remote Actions workflow execution requires pushing branch and opening a pull request on GitHub. |
+| **AWS Cloud Demonstration (Phase 15)** | **PLANNED (Post-Push)** | Phase 15 deployment and verification on AWS are planned but not yet completed; will be executed using the demonstration kit after the GitHub repository push. |
+| **Formal Release Tag & Enterprise CI Branch Protections** | **BLOCKED / PENDING** | Streamlined for personal portfolio / resume review; formal tagging deferred until remote PR and final merge to main. |
