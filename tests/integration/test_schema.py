@@ -48,8 +48,8 @@ def test_user_id_lookup_uses_unique_index_seek(clean_graph):
         ).consume()
 
     def operator_types(plan):
-        yield plan.operator_type
-        for child in plan.children:
+        yield plan["operatorType"]
+        for child in plan.get("children", []):
             yield from operator_types(child)
 
     assert any("UniqueIndexSeek" in op for op in operator_types(summary.plan))

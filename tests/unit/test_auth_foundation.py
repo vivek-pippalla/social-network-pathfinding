@@ -97,3 +97,10 @@ def test_registration_trims_name_and_public_model_has_no_private_fields():
     assert set(PublicUserResponse.model_fields) == {"id", "name", "source"}
     assert "email" not in PublicUserResponse.model_fields
     assert set(OwnProfileResponse.model_fields) == {"id", "name", "source", "email"}
+
+
+def test_registration_normalizes_email_case_and_whitespace():
+    user = UserRegister.model_validate(
+        {"name": "Alice", "email": " Alice@Example.COM ", "password": "long-password"}
+    )
+    assert user.email == "alice@example.com"

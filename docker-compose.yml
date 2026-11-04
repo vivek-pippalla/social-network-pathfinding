@@ -18,7 +18,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:5000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -32,6 +32,7 @@ services:
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
+      NEO4J_server_config_strict__validation_enabled: "false"
       NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP_INITIAL:-512M}
       NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP_MAX:-1G}
       NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE:-512M}

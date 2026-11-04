@@ -45,7 +45,7 @@ def test_authentication_and_private_profile_api_end_to_end(api_client):
     assert set(public_profile.json()) == {"id", "name", "source"}
     search = api_client.get("/api/v1/users/search?q=Integrated", headers=headers)
     assert search.status_code == 200
-    assert search.json()[0]["id"] == user_id
+    assert search.json()["items"][0]["id"] == user_id
     assert "email" not in search.text
 
     login = api_client.post(

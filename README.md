@@ -117,6 +117,19 @@ curl -f http://127.0.0.1:5000/health/ready
 ### 5. Open the Web Application
 Navigate to `http://localhost:5000` in your browser and register or log in. Then use SNAP node IDs (for example, `0` and `107`) as path or recommendation graph users.
 
+### 6. Try a Pathfinding Query & Benchmark
+Authenticate via `/api/v1/auth/token` (or register in the UI) to obtain an access token, then query shortest connection paths:
+
+```bash
+# Query shortest path between SNAP node 0 and node 107
+curl -H "Authorization: Bearer <TOKEN>" http://127.0.0.1:5000/api/v1/path/0/107
+
+# Run latency benchmark against the live stack (cold vs. warm cache)
+python benchmarks/bench_paths.py --base-url http://127.0.0.1:5000 --token <TOKEN> --start 0 --end 3437 --iterations 30
+```
+
+Verified local performance: **18.6ms** (cold Neo4j query) and **14.9ms** (warm Redis cache). See [docs/TESTING.md](docs/TESTING.md#7-streamlined-phase-14-portfolio-verification-2026-11-04) for full 10-pair hop counts and reliability drill evidence.
+
 ---
 
 ## Running Tests

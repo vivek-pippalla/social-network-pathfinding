@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from app.core.config import settings
 from app.domain.errors import AppError
 from app.repositories import graph_repo
 from app.services.cache_service import PathCacheLookup
@@ -46,6 +47,7 @@ def test_repository_interpolates_only_validated_integer_depth():
             return None
 
         def execute_read(self, callback):
+            captured["callback"] = callback
             return callback(Transaction())
 
     class Driver:
@@ -55,9 +57,19 @@ def test_repository_interpolates_only_validated_integer_depth():
     assert graph_repo.find_bounded_shortest_path(Driver(), "a", "a", 7) == [
         {"id": "a", "name": "A"}
     ]
-    assert "CONNECTED*..7" in captured["query"].text
+    query_text = (
+        captured["query"].text
+        if hasattr(captured["query"], "text")
+        else captured["query"]
+    )
+    assert "CONNECTED*..7" in query_text
     assert captured["parameters"] == {"start_id": "a", "end_id": "a"}
-    assert captured["query"].timeout == graph_repo.settings.NEO4J_QUERY_TIMEOUT_SECONDS
+    timeout = getattr(
+        captured["query"],
+        "timeout",
+        getattr(captured.get("callback"), "timeout", None),
+    )
+    assert timeout == settings.NEO4J_QUERY_TIMEOUT_SECONDS
 
 
 @pytest.mark.parametrize("depth", [True, 0, -1, "2; MATCH (n) DETACH DELETE n"])

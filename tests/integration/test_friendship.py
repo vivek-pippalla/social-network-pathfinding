@@ -63,9 +63,8 @@ def test_fifty_concurrent_adds_leave_one_relationship(clean_graph):
         summary = session.run(
             """
             MATCH (a:User)-[r:CONNECTED]-(b:User)
-            WITH CASE WHEN a.id < b.id THEN a.id ELSE b.id END AS low,
-                 CASE WHEN a.id < b.id THEN b.id ELSE a.id END AS high,
-                 count(*) AS copies
+            WHERE a.id < b.id
+            WITH a.id AS low, b.id AS high, count(r) AS copies
             RETURN count(*) AS pairs, sum(copies - 1) AS extra
             """
         ).single()

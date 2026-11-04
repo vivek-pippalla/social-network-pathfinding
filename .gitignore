@@ -41,3 +41,7 @@ docs/*
 !docs/TESTING.md
 !docs/DEPLOYMENT.md
 !docs/IMPLEMENTATION_STATUS.md
+
+# Test & tool caches
+.pytest_tmp/
+.phase7-pip-audit-cache/

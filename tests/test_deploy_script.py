@@ -11,7 +11,27 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = PROJECT_ROOT / "deploy" / "local" / "deploy.sh"
 LOCAL_SCRIPTS = sorted((PROJECT_ROOT / "deploy" / "local").glob("*.sh"))
-BASH = shutil.which("bash")
+
+
+def _find_bash():
+    if sys.platform == "win32":
+        for candidate in (
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\usr\bin\bash.exe"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\bin\bash.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Git\usr\bin\bash.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Git\bin\bash.exe"),
+        ):
+            if os.path.exists(candidate):
+                return candidate
+    found = shutil.which("bash")
+    if sys.platform == "win32" and found and "system32" in found.lower():
+        return None
+    return found
+
+
+BASH = _find_bash()
 
 
 def _bash_is_usable():
@@ -71,9 +91,10 @@ def test_deploy_script_runs_expected_docker_and_health_actions(
     _write_fake_executables(bin_dir, docker_log, curl_log)
 
     environment = os.environ.copy()
+    bash_parent = str(Path(BASH).parent) if BASH else ""
     environment.update(
         {
-            "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
+            "PATH": f"{bin_dir}{os.pathsep}{bash_parent}{os.pathsep}{environment['PATH']}",
             "DOCKER_LOG": str(docker_log),
             "CURL_LOG": str(curl_log),
             "PREVIOUS_CONTAINER": previous_container,

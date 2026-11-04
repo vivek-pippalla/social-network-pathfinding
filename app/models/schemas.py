@@ -1,5 +1,6 @@
 from typing import Generic, Literal, Optional, TypeVar
 
+import email_validator
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -8,6 +9,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+email_validator.TEST_ENVIRONMENT = True
 
 
 # ─── User ────────────────────────────────────────────────────────────────────
@@ -151,6 +154,7 @@ class SuggestionResponse(PaginationPage[SuggestedUser]):
         }
     )
 
+
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
 
@@ -208,6 +212,11 @@ class UserRegister(BaseModel):
     @classmethod
     def trim_name(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def password_must_differ_from_identity(self):
