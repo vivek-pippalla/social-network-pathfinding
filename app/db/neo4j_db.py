@@ -1,11 +1,18 @@
 import logging
-from neo4j import GraphDatabase, Driver
+from neo4j import GraphDatabase, Driver, unit_of_work
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Singleton driver instance — Neo4j manages a connection pool internally.
 _driver: Driver = None
+
+
+def with_transaction_timeout(transaction_function):
+    """Apply the configured timeout to a managed transaction callback."""
+    return unit_of_work(timeout=settings.NEO4J_QUERY_TIMEOUT_SECONDS)(
+        transaction_function
+    )
 
 
 def get_driver() -> Driver:

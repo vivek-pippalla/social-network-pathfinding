@@ -1,0 +1,5 @@
+{
+  "measurement": "pytest -m 'not integration and not e2e' on Python 3.11.14; 2026-11-04",
+  "app/repositories": 41.78,
+  "app/services": 85.44
+}

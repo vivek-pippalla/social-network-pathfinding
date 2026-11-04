@@ -1,64 +1,78 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path, Query
 from neo4j import Driver
 
-from app.core.auth import get_current_user
+from app.api.deps import get_cache_service, get_current_user
+from app.api.openapi import route_errors
 from app.db.neo4j_db import get_driver
-from app.models.schemas import ConnectionCreate, ConnectionResponse, PathResponse, SuggestionResponse
-from app.repositories import graph_repo
-from app.services import pathfinder
+from app.models.schemas import PathResponse, SuggestionResponse
+from app.services import path_service, recommendation_service
+from app.services.cache_service import CacheService
 
 router = APIRouter(prefix="/api/v1", tags=["Graph"])
+USER_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
 
 @router.get(
-    "/path/{user1}/{user2}",
+    "/path/{a}/{b}",
     response_model=PathResponse,
     summary="Shortest path between two users (protected)",
+    operation_id="getShortestPath",
+    responses=route_errors("USER_NOT_FOUND", "PATH_NOT_FOUND", protected=True),
 )
 def get_path(
-    user1: str,
-    user2: str,
+    a: str = Path(..., pattern=USER_ID_PATTERN, description="Starting user ID"),
+    b: str = Path(..., pattern=USER_ID_PATTERN, description="Ending user ID"),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
+    cache: CacheService = Depends(get_cache_service),
 ):
-    return pathfinder.find_shortest_path(driver, user1, user2)
+    return path_service.find_path(driver, a, b, cache)
 
 
 @router.get(
     "/suggestions/me",
     response_model=SuggestionResponse,
     summary="Get your own friend suggestions (protected)",
+    operation_id="getMySuggestions",
+    responses=route_errors("USER_NOT_FOUND", protected=True),
 )
 def get_my_suggestions(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
 ):
-    return pathfinder.get_suggestions(driver, current_user["user_id"])
+    result = recommendation_service.get_suggestions(
+        driver, current_user["user_id"], offset=offset, limit=limit
+    )
+    return {
+        "items": result["suggestions"],
+        "limit": result["limit"],
+        "offset": result["offset"],
+        "total": None,
+    }
 
 
 @router.get(
-    "/suggestions/{user_id}",
+    "/users/{id}/suggestions",
     response_model=SuggestionResponse,
     summary="Get friend suggestions for a user (protected)",
+    operation_id="getUserSuggestions",
+    responses=route_errors("USER_NOT_FOUND", protected=True),
 )
 def get_suggestions(
-    user_id: str,
+    id: str = Path(..., pattern=USER_ID_PATTERN),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     driver: Driver = Depends(get_driver),
     current_user: dict = Depends(get_current_user),
 ):
-    return pathfinder.get_suggestions(driver, user_id)
-
-
-@router.post(
-    "/connections",
-    response_model=ConnectionResponse,
-    status_code=201,
-    summary="Create a connection between two users (protected)",
-)
-def create_connection(
-    conn: ConnectionCreate,
-    driver: Driver = Depends(get_driver),
-    current_user: dict = Depends(get_current_user),
-):
-    graph_repo.create_connection(driver, conn.user_id_1, conn.user_id_2)
-    return {"message": f"Connection created between {conn.user_id_1} and {conn.user_id_2}."}
+    result = recommendation_service.get_suggestions(
+        driver, id, offset=offset, limit=limit
+    )
+    return {
+        "items": result["suggestions"],
+        "limit": result["limit"],
+        "offset": result["offset"],
+        "total": None,
+    }

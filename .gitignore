@@ -15,8 +15,10 @@ env/
 # Docker
 *.pid
 logs/
+backups/
 redis_data/
 mongo_data/
+/data/facebook_combined.txt.gz
 
 # OS files
 .DS_Store
@@ -30,4 +32,21 @@ Thumbs.db
 !*.env.prod.example
 
 documentation/*
-!documentation/aws_deployment_guide.md
+!documentation/archive/legacy_aws/
+
+docs/*
+!docs/API.md
+!docs/openapi.json
+!docs/DATABASE.md
+!docs/DEVELOPMENT.md
+!docs/TESTING.md
+!docs/DEPLOYMENT.md
+!docs/IMPLEMENTATION_STATUS.md
+!docs/aws-deployment-demo.md
+!docs/images/aws/
+
+# Test & tool caches
+.pytest_tmp/
+.phase7-pip-audit-cache/
+.venv/
+uv.lock

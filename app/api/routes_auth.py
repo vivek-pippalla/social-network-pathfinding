@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from neo4j import Driver
+from redis import Redis
 
-from app.core.auth import create_access_token, hash_password, verify_password
+from app.api.openapi import route_errors
+from app.db.redis_cache import get_client
 from app.db.neo4j_db import get_driver
-from app.models.schemas import Token, UserRegister, UserResponse
-from app.repositories import user_repo
+from app.models.schemas import Token, UserRegister
+from app.services import auth_service
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -15,24 +17,27 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
     response_model=Token,
     status_code=201,
     summary="Register a new user account",
-    description=(
-        "Creates a new User node in Neo4j with a bcrypt-hashed password. "
-        "Returns a JWT access token valid for 24 hours."
-    ),
+    description="Create a user and private account, then return a 30-minute access token.",
+    operation_id="registerAccount",
+    responses={
+        201: {"description": "Account created and access token issued."},
+        **route_errors("EMAIL_TAKEN", "RATE_LIMITED"),
+    },
 )
-def register(user: UserRegister, driver: Driver = Depends(get_driver)):
-    existing = user_repo.get_user_by_email(driver, user.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Email '{user.email}' is already registered.",
-        )
-    password_hash = hash_password(user.password)
-    created = user_repo.create_user_with_password(
-        driver, user.name, user.email, password_hash
+def register(
+    user: UserRegister,
+    request: Request,
+    driver: Driver = Depends(get_driver),
+    redis_client: Redis = Depends(get_client),
+):
+    return auth_service.register(
+        driver,
+        redis_client,
+        client_ip=request.client.host if request.client else "unknown",
+        name=user.name,
+        email=str(user.email),
+        password=user.password,
     )
-    token = create_access_token({"sub": created["id"]})
-    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post(
@@ -43,17 +48,22 @@ def register(user: UserRegister, driver: Driver = Depends(get_driver)):
         "Standard OAuth2 password flow. Submit **email** as `username` and your password. "
         "The Swagger UI 'Authorize' button uses this endpoint automatically."
     ),
+    operation_id="createAccessToken",
+    responses={
+        200: {"description": "Access token issued."},
+        **route_errors("RATE_LIMITED", "UNAUTHENTICATED"),
+    },
 )
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     driver: Driver = Depends(get_driver),
+    redis_client: Redis = Depends(get_client),
 ):
-    user = user_repo.get_user_by_email(driver, form_data.username)
-    if not user or not verify_password(form_data.password, user.get("password_hash", "")):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    token = create_access_token({"sub": user["id"]})
-    return {"access_token": token, "token_type": "bearer"}
+    return auth_service.login(
+        driver,
+        redis_client,
+        client_ip=request.client.host if request.client else "unknown",
+        email=form_data.username,
+        password=form_data.password,
+    )

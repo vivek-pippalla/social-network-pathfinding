@@ -1,4 +1,10 @@
+import os
 from unittest.mock import MagicMock
+
+# Explicit non-production configuration for test collection and module imports.
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("SECRET_KEY", "test-only-secret-key-32-bytes-minimum")
+os.environ.setdefault("NEO4J_PASSWORD", "test-neo4j-password")
 import pytest
 from app.main import app
 from app.db.neo4j_db import get_driver

@@ -1,56 +1,35 @@
-# -------------------
-# 1️⃣ Builder Stage
-# -------------------
-FROM python:3.11-slim AS builder
+ARG PYTHON_IMAGE=python:3.11.18-slim-bookworm
+
+FROM ${PYTHON_IMAGE} AS builder
+
+WORKDIR /build
+COPY requirements.txt ./requirements.txt
+RUN python -m pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+FROM ${PYTHON_IMAGE} AS runtime
+
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    WEB_CONCURRENCY=2 \
+    FORWARDED_ALLOW_IPS=127.0.0.1,::1
+
+RUN groupadd --system --gid 10001 appuser \
+    && useradd --system --uid 10001 --gid appuser --create-home appuser
 
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    gcc g++ make curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
-
-# -------------------
-# 2️⃣ Production Stage
-# -------------------
-FROM python:3.11-slim
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /usr/local /usr/local
-
+COPY --from=builder /install /usr/local
 COPY app/ ./app/
 COPY scripts/ ./scripts/
-COPY requirements.txt .
+COPY data/ ./data/
+COPY requirements.txt ./requirements.txt
 
-ENV PYTHONPATH="/app"
-ENV PYTHONUNBUFFERED=1
-
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-RUN chown -R appuser:appuser /app
-
-USER appuser
+RUN python -m pip uninstall -y pip setuptools wheel \
+    && chown -R appuser:appuser /app
+USER 10001:10001
 
 EXPOSE 5000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')" || exit 1
 
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
-
-CMD [ \
-    "uvicorn", \
-    "app.main:app", \
-    "--host", \
-    "0.0.0.0", \
-    "--port", \
-    "5000", \
-    "--workers", \
-    "4" \
-]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 5000 --workers \"${WEB_CONCURRENCY:-2}\" --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1,::1}\""]

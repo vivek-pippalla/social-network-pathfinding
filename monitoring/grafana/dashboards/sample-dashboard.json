@@ -2,151 +2,56 @@
   "dashboard": {
     "id": null,
     "uid": "social-network-api",
-    "title": "Social Network API Metrics",
+    "title": "Social Network API Observability",
     "tags": ["fastapi", "social-network"],
     "timezone": "browser",
     "schemaVersion": 36,
     "version": 1,
     "refresh": "10s",
+    "time": { "from": "now-1h", "to": "now" },
     "panels": [
       {
         "id": 1,
-        "type": "stat",
-        "title": "Total Requests (last 5m)",
-        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
-        "targets": [
-          {
-            "expr": "sum(increase(http_requests_total[5m]))",
-            "legendFormat": "Requests"
-          }
-        ],
-        "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-        "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": null }] } } }
-      },
-      {
-        "id": 2,
-        "type": "stat",
-        "title": "Error Rate (last 5m)",
-        "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
-        "targets": [
-          {
-            "expr": "sum(increase(http_requests_total{status=~\"5..\"}[5m])) / sum(increase(http_requests_total[5m])) * 100",
-            "legendFormat": "Error %"
-          }
-        ],
-        "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "color": { "mode": "thresholds" },
-            "thresholds": {
-              "steps": [
-                { "color": "green", "value": null },
-                { "color": "yellow", "value": 1 },
-                { "color": "red", "value": 5 }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 3,
-        "type": "stat",
-        "title": "Avg Latency (last 5m)",
-        "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_request_duration_seconds_sum[5m])) / sum(rate(http_request_duration_seconds_count[5m]))",
-            "legendFormat": "Avg latency"
-          }
-        ],
-        "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-        "fieldConfig": {
-          "defaults": {
-            "unit": "s",
-            "color": { "mode": "thresholds" },
-            "thresholds": {
-              "steps": [
-                { "color": "green", "value": null },
-                { "color": "yellow", "value": 0.5 },
-                { "color": "red", "value": 1 }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 4,
-        "type": "stat",
-        "title": "Active Requests",
-        "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
-        "targets": [
-          {
-            "expr": "sum(http_requests_inprogress)",
-            "legendFormat": "In-flight"
-          }
-        ],
-        "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
-        "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": null }] } } }
-      },
-      {
-        "id": 5,
         "type": "timeseries",
-        "title": "Request Rate by Endpoint",
-        "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
-        "targets": [
-          {
-            "expr": "sum by (handler) (rate(http_requests_total[1m]))",
-            "legendFormat": "{{handler}}"
-          }
-        ],
+        "title": "Request rate",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [{ "expr": "sum by (handler) (rate(http_requests_total[5m]))", "legendFormat": "{{handler}}" }],
         "fieldConfig": { "defaults": { "unit": "reqps" } }
       },
       {
-        "id": 6,
+        "id": 2,
         "type": "timeseries",
-        "title": "P95 Latency by Endpoint",
-        "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+        "title": "HTTP error rate",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [{ "expr": "100 * sum(rate(http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1e-9)", "legendFormat": "5xx percent" }],
+        "fieldConfig": { "defaults": { "unit": "percent" } }
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "HTTP latency percentiles",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
         "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum by (handler, le) (rate(http_request_duration_seconds_bucket[1m])))",
-            "legendFormat": "p95 {{handler}}"
-          }
+          { "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50" },
+          { "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95" },
+          { "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99" }
         ],
         "fieldConfig": { "defaults": { "unit": "s" } }
       },
       {
-        "id": 7,
+        "id": 4,
         "type": "timeseries",
-        "title": "HTTP Status Code Breakdown",
-        "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
-        "targets": [
-          {
-            "expr": "sum by (status) (rate(http_requests_total[1m]))",
-            "legendFormat": "HTTP {{status}}"
-          }
-        ],
-        "fieldConfig": { "defaults": { "unit": "reqps" } }
+        "title": "Path cache hit ratio",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "targets": [{ "expr": "sum(rate(path_cache_operations_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(path_cache_operations_total{result=~\"hit|miss\"}[5m])), 1e-9)", "legendFormat": "hit ratio" }],
+        "fieldConfig": { "defaults": { "unit": "percentunit" } }
       },
       {
-        "id": 8,
+        "id": 5,
         "type": "timeseries",
-        "title": "Latency Percentiles (all endpoints)",
-        "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))",
-            "legendFormat": "p50"
-          },
-          {
-            "expr": "histogram_quantile(0.90, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))",
-            "legendFormat": "p90"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))",
-            "legendFormat": "p99"
-          }
-        ],
+        "title": "Neo4j query latency p95 by operation",
+        "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+        "targets": [{ "expr": "histogram_quantile(0.95, sum by (operation, le) (rate(neo4j_query_duration_seconds_bucket[5m])))", "legendFormat": "{{operation}}" }],
         "fieldConfig": { "defaults": { "unit": "s" } }
       }
     ]

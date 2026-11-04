@@ -1,0 +1,32 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["F401"]
+
+[tool.ruff.format]
+# Preserve unmodified baseline formatting during Phase 0; touched files are formatted.
+exclude = [
+    "app/api/routes_auth.py",
+    "app/api/routes_friends.py",
+    "app/api/routes_graph.py",
+    "app/api/routes_users.py",
+    "app/core/exceptions.py",
+    "app/db/neo4j_db.py",
+    "app/models/schemas.py",
+    "app/repositories/user_repo.py",
+    "app/services/user_service.py",
+    "scripts/seed_data.py",
+    "tests/test_api.py",
+    "tests/test_cloudwatch_logging.py",
+    "tests/test_deploy_script.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: requires real Neo4j and Redis services",
+    "e2e: requires the complete application stack and a browser",
+]

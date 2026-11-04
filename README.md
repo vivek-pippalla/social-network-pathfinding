@@ -1,274 +1,175 @@
-# Social Network Pathfinding Engine (Cloud-Native Edition)
+# Social Network Pathfinding Engine
 
-[![CI/CD Pipeline](https://github.com/vivek-pippalla/social-network-pathfinding/actions/workflows/ci.yml/badge.svg)](https://github.com/vivek-pippalla/social-network-pathfinding/actions/workflows/ci.yml)
+[![CI](https://github.com/vivek-pippalla/social-network-pathfinding/actions/workflows/ci.yml/badge.svg)](https://github.com/vivek-pippalla/social-network-pathfinding/actions/workflows/ci.yml)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688.svg)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.162-009688.svg)](https://fastapi.tiangolo.com)
 [![Neo4j](https://img.shields.io/badge/Neo4j-5.12-blue.svg)](https://neo4j.com/)
-[![Redis](https://img.shields.io/badge/Redis-7.0-red.svg)](https://redis.io/)
-[![AWS](https://img.shields.io/badge/AWS-EC2%20%7C%20S3%20%7C%20IAM%20%7C%20CloudWatch%20%7C%20ECR-orange.svg)](https://aws.amazon.com/)
+[![Redis](https://img.shields.io/badge/Redis-7-red.svg)](https://redis.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A production-grade, cloud-native social graph engine that computes the **shortest connection path** between users in a social graph (similar to LinkedIn's *"You and Satya Nadella are 3 degrees apart"*).
+A local-first social network graph engine and interactive web interface that computes **degrees of separation (shortest connection paths)** and **friend recommendations** across social graphs.
 
-Built with **FastAPI**, **Neo4j**, and **Redis**, backed by the real-world [Stanford SNAP Facebook dataset](https://snap.stanford.edu/data/ego-Facebook.html) (4,039 users · 88,234 connections). Deployed on **AWS** with **EC2, S3, IAM, CloudWatch, and ECR**, with fully automated CI/CD via **GitHub Actions using AWS OIDC federation**.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Tech Stack & AWS Services](#tech-stack--aws-services)
-- [System Architecture](#system-architecture)
-- [Cloud Infrastructure & Security](#cloud-infrastructure--security)
-- [API Reference](#api-reference)
-- [Local Quickstart](#local-quickstart)
-- [Running Tests](#running-tests)
-- [AWS Production Deployment](#aws-production-deployment)
-- [Project Structure](#project-structure)
-- [Environment Variables](#environment-variables)
-- [License](#license)
+Built with **Python 3.11**, **FastAPI**, **Neo4j**, and **Redis**, backed by the [Stanford SNAP Facebook ego-network dataset](https://snap.stanford.edu/data/ego-Facebook.html) (4,039 users, 88,234 verified undirected connections).
 
 ---
 
 ## Overview
 
-Given two user IDs, the engine computes the shortest path through the social graph using Neo4j's built-in **bidirectional BFS** (`shortestPath()`). Results are cached in Redis using order-independent keys so repeated queries return in under 10 ms.
+Calculating degrees of separation ("You and another user are 3 connections apart") requires traversing graph relationships. This project uses Neo4j for bounded path queries; latency has not been measured against a running stack.
 
-The system also provides **"People You May Know"** recommendations — ranking friend-of-friend suggestions by mutual friend count using the Triadic Closure algorithm — available through an authenticated endpoint for any user and a personalized `/me` endpoint derived from your JWT token.
+This engine provides:
+1. **Bounded Shortest Path Computation:** Evaluates the shortest connection chain between any two users using Neo4j's native `shortestPath()` query, bounded by the configurable maximum hop depth (`MAX_PATH_DEPTH=6`).
+2. **Version-Gated Cache Invalidation:** Uses an $O(1)$ global invalidation pattern with a Redis `graph:version` counter. A successful version bump makes old path keys unreachable after a committed graph change; if Redis is unavailable during the bump, TTLs bound possible staleness.
+3. **Triadic Closure Friend Recommendations:** Surfaces "People You May Know" ranked by mutual friend counts, filtered against existing connections with deterministic pagination.
+4. **Accessibility-oriented Frontend:** A responsive vanilla HTML5/ES modules single-page application with ARIA live regions, zero JavaScript framework dependencies, client-side XSS protection, and interactive graph path rendering. Browser and manual accessibility checks remain deferred.
 
 ---
 
-## Key Features
+## Implemented Features
 
-| Domain | Feature | Description |
+The table describes implemented code and configuration. Live-service and browser verification status is recorded in [docs/TESTING.md](docs/TESTING.md).
+
+| Domain | Feature | Verified Technical Implementation |
 |---|---|---|
-| **Graph Algorithm** | **Shortest Path** | Bidirectional BFS with hop counts between any two nodes in <150 ms |
-| **Caching** | **Redis Cache-Aside** | Order-independent cache keys (`path:min:max`); cache hits return in <10 ms |
-| **Recommendations** | **Friend Suggestions** | Triadic closure ranking friends-of-friends by mutual connections |
-| **Cloud Storage** | **S3 Dataset Ingestion** | Robust, private S3 ingestion with data validation and URL/local fallbacks |
-| **Security & Config** | **Host Secret Isolation** | Protected `.env.prod` (chmod 600) outside Git; unexposed internal database ports |
-| **Observability** | **CloudWatch & Prometheus** | Dual-tier monitoring: CloudWatch JSON logs + Prometheus/Grafana metrics |
-| **Identity & Access** | **JWT & Least-Privilege IAM** | OAuth2 password flow with bcrypt + fine-grained AWS IAM roles & policies |
-| **DevOps & CI/CD** | **GitHub Actions OIDC** | Keyless AWS authentication building and pushing Docker images to ECR |
-| **Containerization** | **Production Docker Compose** | Isolated internal bridge network; Neo4j & Redis ports shielded from public host |
+| **Graph Algorithm** | **Bounded Shortest Path** | Implements Neo4j `shortestPath()` with a configurable maximum depth (default 6). Comparison tests against an independent BFS oracle are authored; live Neo4j execution remains unverified. |
+| **Caching** | **Version-Gated Redis Cache** | Implements canonical keys (`path:v{N}:{lo}:{hi}`), positive and negative TTLs, and $O(1)$ version invalidation. If Redis is unavailable during a version bump, stale entries may remain usable until their TTL expires. |
+| **Recommendations** | **Friend Suggestions** | Triadic closure Cypher query ranking non-connected second-degree nodes by mutual friend count with `SKIP`/`LIMIT`. |
+| **Identity & Auth** | **JWT & Argon2id** | Ephemeral 30-minute HS256 JWT tokens with Argon2id password hashing; credentials stored in dedicated private `Account` nodes. |
+| **Abuse Prevention** | **Fixed-Window Rate Limiting** | Redis atomic counters for login (5/min), registration (5/min), and search (30/min) with `Retry-After` headers. |
+| **Dataset Ingestion** | **SNAP Pipeline** | Implements SHA-256 verification, parser validation (including duplicate and self-loop rejection), and additive batch loading. Live Neo4j load and idempotency checks remain unverified. |
+| **Security & Privacy** | **Boundary Controls** | Compose keeps database ports off the public proxy; the image uses a non-root user (`10001:10001`). The CSP allows inline styles for the vendored graph library. |
+| **Observability** | **Prometheus & Grafana** | Internal Prometheus endpoint (`/metrics`) and pre-configured Grafana dashboard (Compose `monitoring` profile). |
+| **Deployment** | **Local Docker Stack** | Hardened multi-stage Dockerfile, loopback development override, prod-like Caddy edge stack, and automated rollback scripts. |
 
 ---
 
-## Tech Stack & AWS Services
+## Architecture
 
-### Core Application
-- **Language & Framework:** Python 3.11, FastAPI, Pydantic v2
-- **Databases:** Neo4j 5.12 (Graph DB), Redis 7 (In-Memory Cache)
-- **Security:** JWT (python-jose), bcrypt (passlib)
-- **Monitoring:** Prometheus, Grafana, Vis.js graph UI
+The application is organized into router, service, and repository layers. Services handle most business operations and repositories hold parameterized Cypher queries; some dependency-level behavior also crosses these boundaries.
 
-### AWS Cloud Architecture
-- **Amazon EC2 (`t3.medium`):** Single-host container runtime running Dockerized FastAPI, Neo4j, and Redis.
-- **Amazon S3:** Private bucket hosting raw gzipped graph datasets with SSE-AES256.
-- **AWS IAM:** Strict least-privilege instance roles and GitHub Actions trust policies.
-- **Amazon CloudWatch:** Centralized structured JSON log shipping with stream auto-naming and retention.
-- **Amazon ECR:** Private container registry for multi-stage production Docker images.
-- **GitHub Actions:** CI test execution with pytest + OIDC-based deployment pipeline.
+```mermaid
+flowchart LR
+  subgraph Client
+    UI[Browser SPA<br/>HTML5 + Vanilla JS]
+  end
 
----
+  subgraph Edge
+    Caddy[Caddy Reverse Proxy<br/>Port 80/443]
+  end
 
-## System Architecture
+  subgraph Application
+    API[FastAPI Application<br/>Configurable Uvicorn workers<br/>(WEB_CONCURRENCY default: 2)]
+  end
 
-### AWS Cloud Production Layout
+  subgraph Storage
+    Neo4j[(Neo4j 5.12<br/>User, Account, CONNECTED)]
+    Redis[(Redis 7<br/>Cache & Rate Limits)]
+  end
 
-```
-                                    AWS Cloud (ap-south-1)
- ┌────────────────────────────────────────────────────────────────────────────────────────┐
- │                                                                                        │
- │  ┌──────────────────────┐             ┌───────────────────────────────────────────┐    │
- │  │      Amazon S3       │             │           Amazon CloudWatch Logs          │    │
- │  │  (Private Datasets)  │             │   (/social-network-pathfinding/app)       │    │
- │  └──────────┬───────────┘             └─────────────────────▲─────────────────────┘    │
- │             │ (IAM Auth / seed_data.py)                     │ (Structured JSON logs)   │
- │             ▼                                               │                          │
- │  ┌──────────────────────────────────────────────────────────┴────────────────────┐   │
- │  │ Amazon EC2 (t3.medium: 2 vCPU, 4GB RAM + 2GB Swap)                             │   │
- │  │                                                                                │   │
- │  │  Security Group: Inbound 22 (SSH Admin), 80 (HTTP), 443 (HTTPS)                │   │
- │  │                                                                                │   │
- │  │   ┌────────────────────────────────────────────────────────────────────────┐   │   │
- │  │   │ Docker Network: internal-network (Bridge)                              │   │   │
- │  │   │                                                                        │   │   │
- │  │   │   ┌────────────────────────┐        ┌───────────────────────────────┐  │   │   │
- │  │   │   │   FastAPI App (ECR)    │───────▶│      Redis 7 Cache (LRU)      │  │   │   │
- │  │   │   │   (Internal port 5000) │        │      (Internal port 6379)     │  │   │   │
- │  │   │   └──────────┬─────────────┘        │      (Shielded from Host)     │  │   │   │
- │  │   │              │                      └───────────────────────────────┘  │   │   │
- │  │   │              ▼                                                         │   │   │
- │  │   │   ┌────────────────────────┐                                           │   │   │
- │  │   │   │   Neo4j 5.12 Graph DB  │                                           │   │   │
- │  │   │   │  (Internal 7687, 7474) │                                           │   │   │
- │  │   │   │  (Shielded from Host)  │                                           │   │   │
- │  │   │   └────────────────────────┘                                           │   │   │
- │  │   └────────────────────────────────────────────────────────────────────────┘   │   │
- │  └────────────────────────────────────────▲───────────────────────────────────────┘   │
- │                                            │                                          │
- │  ┌──────────────────────┐                  │ (ecr pull via Instance Role)             │
- │  │      Amazon ECR      │──────────────────┘                                          │
- │  │ (social-network-api) │                                                             │
- │  └──────────▲───────────┘                                                             │
- │             │ (docker push via OIDC)                                                  │
- └─────────────┼─────────────────────────────────────────────────────────────────────────┘
-               │
- ┌─────────────┴─────────────────────────────────────────────────────────────────────────┐
- │ GitHub Actions (CI/CD Pipeline)                                                        │
- │ 1. Pytest suite (API, S3 ingestion, CloudWatch logging, deployment, Caddy config)       │
- │ 2. Build multi-stage Docker image                                                     │
- │ 3. AWS OIDC STS AssumeRoleWithWebIdentity (Keyless) -> Push to ECR                    │
- │ 4. SSH to EC2 -> Pull latest ECR image -> Update containers -> Healthcheck            │
- └───────────────────────────────────────────────────────────────────────────────────────┘
+  UI -->|HTTP / HTTPS| Caddy
+  Caddy -->|Proxy Pass| API
+  API -->|Read / Write Tx| Neo4j
+  API -->|Cache-aside & Versioning| Redis
 ```
 
----
-
-## Cloud Infrastructure & Security
-
-1. **Keyless AWS Authentication (OIDC):** GitHub Actions generates short-lived STS tokens directly using `AssumeRoleWithWebIdentity`, completely avoiding hardcoded AWS access keys.
-2. **Network Isolation:** Neo4j (7474, 7687) and Redis (6379) ports are unexposed to the host machine in production. They communicate exclusively over Docker's internal virtual bridge network.
-3. **Host Secret Isolation:** Production secrets are isolated in a server-side `.env.prod` file with `chmod 600`, preventing exposure to Git and Docker image layers.
-4. **Resilient Logging:** CloudWatch Log streaming (`watchtower`) handles transient AWS errors gracefully, always guaranteeing local stdout stream availability.
+The overview above shows the main service flow. The [database guide](docs/DATABASE.md) documents the graph model, queries, and cache keys.
 
 ---
 
-## API Reference
+## Technology Stack
 
-### Public Endpoints (No JWT Required)
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | Application health check |
-| `POST` | `/api/v1/auth/register` | Register new user account (returns JWT) |
-| `POST` | `/api/v1/auth/token` | Login via OAuth2 password flow (returns JWT) |
-| `GET` | `/api/v1/users/{user_id}` | Retrieve public user profile |
-| `GET` | `/api/v1/users/search?q=` | Search user profiles by name |
-| `POST` | `/api/v1/users/` | Create a user without a password |
-
-### Protected Endpoints (Bearer JWT Required)
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/v1/path/{user1}/{user2}` | Shortest path between two users (cached in Redis) |
-| `GET` | `/api/v1/suggestions/{user_id}` | Friend-of-friend suggestions for any user ID |
-| `GET` | `/api/v1/suggestions/me` | Personalized friend suggestions for authenticated user |
-| `GET` | `/api/v1/users/me` | Retrieve authenticated user's profile |
-| `PUT` | `/api/v1/users/me` | Update authenticated user's profile |
-| `POST` | `/api/v1/connections` | Create a friendship connection between two users |
-| `POST` | `/friends/{friend_id}` | Add a friend to authenticated user |
-| `DELETE` | `/friends/{friend_id}` | Remove a friend connection |
+- **Backend:** Python 3.11, FastAPI, Pydantic v2, Uvicorn
+- **Graph Database:** Neo4j Community 5.12 (Cypher query language)
+- **Cache & Rate Limiting:** Redis 7 (volatile-lru, password-protected)
+- **Edge Reverse Proxy:** Caddy 2
+- **Containerization:** Docker, Docker Compose
+- **Quality & CI:** Pytest, Ruff, Actionlint, Shellcheck, Pip-audit, Detect-secrets
 
 ---
 
-## Local Quickstart
+## Quickstart
 
 ### Prerequisites
-- Docker & Docker Compose
-- Python 3.11
+- Docker Engine 24.0+ and Docker Compose v2.20+
+- (Optional for host testing) Python 3.11
 
-### 1. Clone & Configure
+### 1. Clone & Configure Environment
 ```bash
-git clone https://github.com/vivek-pippalla/social-network-pathfinding.git
-cd social-network-pathfinding
 cp .env.example .env
 ```
+Open `.env` and configure private passwords for `SECRET_KEY`, `NEO4J_PASSWORD`, and `REDIS_PASSWORD` (use `openssl rand -hex 32` or similar random hex strings).
 
-### 2. Start Local Containers
+### 2. Start the Stack
 ```bash
-docker compose up --build -d
+docker compose up -d --build
 ```
 
-### 3. Seed Dataset
+### 3. Ingest the Stanford SNAP Dataset
 ```bash
-# Ingests from local file / URL / S3 automatically with full record validation
-docker exec -it social-network-api python scripts/seed_data.py
+docker compose run --rm api python -m app.cli ingest
 ```
 
-### 4. Access Services
-- **Web UI & Graph Visualizer:** `http://localhost:5000`
-- **Interactive Swagger Docs:** `http://localhost:5000/docs`
-- **Neo4j Browser:** `http://localhost:7474`
-- **Prometheus Metrics:** `http://localhost:9090`
-- **Grafana Dashboards:** `http://localhost:3000` (`admin` / `admin`)
+### 4. Verify System Readiness
+```bash
+curl -f http://127.0.0.1:5000/health/ready
+```
+
+### 5. Open the Web Application
+Navigate to `http://localhost:5000` in your browser and register or log in. Then use SNAP node IDs (for example, `0` and `107`) as path or recommendation graph users.
+
+### 6. Try a Pathfinding Query & Benchmark
+Authenticate via `/api/v1/auth/token` (or register in the UI) to obtain an access token, then query shortest connection paths:
+
+```bash
+# Query shortest path between SNAP node 0 and node 107
+curl -H "Authorization: Bearer <TOKEN>" http://127.0.0.1:5000/api/v1/path/0/107
+
+# Run latency benchmark against the live stack (cold vs. warm cache)
+python benchmarks/bench_paths.py --base-url http://127.0.0.1:5000 --token <TOKEN> --start 0 --end 3437 --iterations 30
+```
+
+Verified local performance: **18.6ms** (cold Neo4j query) and **14.9ms** (warm Redis cache). See [docs/TESTING.md](docs/TESTING.md#7-streamlined-phase-14-portfolio-verification-2026-11-04) for full 10-pair hop counts and reliability drill evidence.
 
 ---
 
 ## Running Tests
 
-The test suite runs 100% offline with zero live infrastructure dependencies by mocking database and AWS SDK calls:
+Execute the full suite of static analysis and test layers locally:
 
 ```bash
-# Run the complete test suite
-pytest tests/ -v
+# 1. Lint and formatting
+ruff check app tests scripts benchmarks optional_integrations
+ruff format --check app tests scripts benchmarks optional_integrations
+
+# 2. Unit and contract test suite
+pytest -q -m "not integration and not e2e"
+
+# 3. Integration suite (requires active Neo4j and Redis service containers)
+REQUIRE_INTEGRATION=1 pytest -q -m integration
+
+# 4. Dependency security audit
+pip-audit -r requirements.txt
 ```
 
-**Test Coverage Highlights:**
-- **API routes & Auth:** JWT encoding/decoding, token expiry, password hashing, 401 guards, friend management.
-- **Graph & Cache-aside:** Redis cache hits, Neo4j cache misses, hop counts.
-- **S3 Dataset Pipeline:** S3 downloads, ClientError handling, record validation, URL fallbacks, production failure enforcement.
-- **CloudWatch Logging:** Handler attachment, duplicate prevention, structured JSON formatting.
-- **Deployment & Rollback Logic:** Success states, healthcheck timeout, automated rollback restoration, critical rollback failure reporting.
+See [docs/TESTING.md](docs/TESTING.md) for testing methodology, property test details, and coverage enforcement.
 
 ---
 
-## AWS Production Deployment
+## Documentation Index
 
-For the complete step-by-step AWS deployment walkthrough, IAM policies, and cost mitigation instructions, refer to:
-
-👉 **[AWS Production Deployment Guide](documentation/aws_deployment_guide.md)**
-
----
-
-## Project Structure
-
-```
-social-network-pathfinding/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                 # GitHub Actions CI/CD with AWS OIDC federation
-├── app/
-│   ├── api/                       # Router layer (REST endpoints)
-│   ├── core/                      # Config, auth, exceptions, logging
-│   │   ├── config.py              # Pydantic v2 settings
-│   │   └── logging_config.py      # CloudWatch + structured JSON logging
-│   ├── db/                        # Neo4j & Redis connection singletons
-│   ├── models/                    # Pydantic request/response schemas
-│   ├── repositories/              # Cypher query & graph repository layer
-│   ├── services/                  # Business logic & algorithms
-│   │   ├── pathfinder.py          # Shortest path & triadic closure
-│   │   ├── s3_service.py          # S3 dataset downloader & edge validator
-│   │   └── user_service.py        # User profile management
-│   ├── static/                    # Frontend UI (HTML5 + Vis.js graph demo)
-│   └── main.py                    # FastAPI application entrypoint
-├── infra/
-│   └── iam/                       # Least-privilege IAM policy documents
-│       ├── ec2-instance-policy.json
-│       ├── ec2-trust-policy.json
-│       ├── github-actions-policy.json
-│       └── github-oidc-trust-policy.json
-├── scripts/
-│   ├── deploy_prod.sh             # EC2 deployment automation script
-│   ├── ec2_setup.sh               # Host setup (Docker, swap, dependencies)
-│   ├── ecr_push.sh                # Docker build & push to AWS ECR
-│   └── seed_data.py               # Dataset ingestion pipeline (S3/URL/Local)
-├── tests/
-│   ├── conftest.py                # Pytest mock fixtures
-│   ├── test_api.py                # Core API & auth test suite
-│   ├── test_cloudwatch_logging.py # CloudWatch logging test suite
-│   ├── test_deploy_script.py      # Deployment & rollback test suite
-│   ├── test_s3_ingestion.py       # S3 dataset ingestion test suite
-│   └── test_caddy_config.py       # Production proxy and Compose config checks
-├── documentation/
-│   └── aws_deployment_guide.md    # Comprehensive AWS deployment guide
-├── docker-compose.yml             # Local development stack
-├── docker-compose.prod.yml        # Hardened production stack for EC2
-├── Dockerfile                     # Multi-stage production container
-└── requirements.txt               # Locked dependencies
-```
+- [Database Schema & Query Design](docs/DATABASE.md): Neo4j graph model, constraints, canonical edge orientation, and Redis key specs.
+- [API Reference](docs/API.md): Endpoint tables, authentication schemas, error envelopes, and rate limits.
+- [Development Guide](docs/DEVELOPMENT.md): Local environment setup, CLI tool usage, code boundaries, and Git workflows.
+- [Testing & Quality Guide](docs/TESTING.md): Test layers, independent BFS oracle validation, and coverage regression gates.
+- [Deployment & Operations](docs/DEPLOYMENT.md): Multi-stage Docker, Compose profiles, backup/restore runbooks, and recovery procedures.
+- [Security Policy](SECURITY.md): Threat boundaries, password hashing, token expiration, and vulnerability disclosure.
 
 ---
 
-## License
+## Known Limitations
 
-MIT License — see [LICENSE](LICENSE) for details.
+- **Single-Host Architecture:** Engineered as a single-host containerized stack. Horizontal auto-scaling, distributed graph clustering, and Kubernetes deployments are intentionally omitted.
+- **Graph Visibility:** All authenticated users can query paths, suggestions, and friend connections across the graph. Credentials and emails remain strictly private.
+- **Identity Scope:** No email verification, password reset workflows, or multi-factor authentication (MFA). Stolen tokens remain valid until their 30-minute TTL expires.
+- **Benchmarking Pre-requisite:** Path latency benchmarks (`benchmarks/bench_paths.py`) require a running, ingested stack and are reported with specific machine specifications rather than assumed static claims.
+- **Cloud Demonstration:** AWS deployment files in `deploy/aws/` are authored as a manual portfolio demonstration kit (Phase 15). The documented default target is local Docker Compose; no AWS deployment is claimed.

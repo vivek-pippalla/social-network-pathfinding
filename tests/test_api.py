@@ -1,353 +1,404 @@
-"""
-Full test suite for the Social Network Pathfinding API.
-
-Strategy
---------
-- FastAPI's TestClient simulates real HTTP requests with no running server.
-- All Neo4j and Redis calls are mocked at the repository / cache layer so the
-  tests pass in CI with zero infrastructure.
-- JWT-protected endpoints use a pytest fixture that overrides get_current_user,
-  keeping auth logic out of unrelated test cases.
-- Auth-specific tests generate real tokens so the full JWT encode/decode path
-  is exercised.
-
-Run with:  pytest tests/ -v
-"""
+from unittest.mock import ANY, Mock, call, patch
 
 import pytest
-from unittest.mock import patch, call, ANY
 from fastapi.testclient import TestClient
+from neo4j.exceptions import Neo4jError
 
+from app.api.deps import get_current_user
+from app.core.security import create_access_token
+from app.db.neo4j_db import get_driver
+from app.db.redis_cache import get_client
+from app.domain.errors import AppError, RateLimitedError
 from app.main import app
-from app.core.auth import get_current_user, create_access_token
 
 client = TestClient(app)
 
-# ─── Fixture: bypass JWT for graph-layer tests ─────────────────────────────
+
+class RedisStub:
+    def eval(self, *_args):
+        return [1, 60]
+
+
+class BrokenRedis:
+    def eval(self, *_args):
+        raise OSError("unavailable")
+
 
 @pytest.fixture
-def auth(monkeypatch):
-    """Override JWT dependency so graph-endpoint tests don't need a token."""
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "test-user-id"}
-    yield
+def authenticated_client():
+    previous = app.dependency_overrides.copy()
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "test-user"}
+    app.dependency_overrides[get_client] = RedisStub
+    yield client
     app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous)
 
 
-def make_token(user_id: str = "test-user-id") -> str:
-    """Generate a real JWT for auth-endpoint tests."""
-    return create_access_token({"sub": user_id})
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 1 — Health check
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_health_check():
-    """GET /health must return 200 and status='ok'."""
-    res = client.get("/health")
-    assert res.status_code == 200
-    assert res.json()["status"] == "ok"
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 2 — User endpoints
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_create_user_missing_name_returns_422():
-    """Pydantic rejects a body with no 'name' — 422 Unprocessable Entity."""
-    res = client.post("/api/v1/users/", json={})
-    assert res.status_code == 422
-
-
-def test_create_user_success():
-    """POST /users/ with valid body returns 201 and the created user."""
-    mock_user = {"id": "abc12345", "name": "Alice", "email": "alice@test.com"}
-    with patch("app.services.user_service.user_repo.create_user", return_value=mock_user):
-        res = client.post("/api/v1/users/", json={"name": "Alice", "email": "alice@test.com"})
-    assert res.status_code == 201
-    data = res.json()
-    assert data["id"] == "abc12345"
-    assert data["name"] == "Alice"
-
-
-def test_get_user_by_id_success():
-    """GET /users/{id} returns the user when found."""
-    mock_user = {"id": "abc12345", "name": "Alice", "email": "alice@test.com"}
-    with patch("app.services.user_service.user_repo.get_user_by_id", return_value=mock_user):
-        res = client.get("/api/v1/users/abc12345")
-    assert res.status_code == 200
-    assert res.json()["name"] == "Alice"
-
-
-def test_get_nonexistent_user_returns_404():
-    """GET /users/{id} returns 404 for an unknown user (UserNotFoundException)."""
-    with patch("app.services.user_service.user_repo.get_user_by_id", return_value=None):
-        res = client.get("/api/v1/users/does-not-exist")
-    assert res.status_code == 404
-    assert "not found" in res.json()["detail"].lower()
-
-
-def test_search_users_returns_list():
-    """GET /users/search?q= returns a list of matching users."""
-    mock_users = [
-        {"id": "aaa", "name": "Alice Smith", "email": None},
-        {"id": "bbb", "name": "Alice Jones", "email": None},
-    ]
-    with patch("app.services.user_service.user_repo.search_users", return_value=mock_users):
-        res = client.get("/api/v1/users/search?q=alice")
-    assert res.status_code == 200
-    assert len(res.json()) == 2
-    assert res.json()[0]["name"] == "Alice Smith"
-
-
-def test_search_users_empty_query_returns_422():
-    """GET /users/search?q= with empty query string returns 422 Unprocessable Entity."""
-    res = client.get("/api/v1/users/search?q=")
-    assert res.status_code == 422
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 3 — User Profile Management (authenticated)
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_get_my_profile_success(auth):
-    """GET /users/me should return the profile of the authenticated user."""
-    mock_user = {"id": "test-user-id", "name": "Test User", "email": "test@example.com"}
-    with patch("app.api.routes_users.user_service.get_user", return_value=mock_user) as mock_get_user:
-        res = client.get("/api/v1/users/me")
-
-    assert res.status_code == 200
-    assert res.json()["id"] == "test-user-id"
-    assert res.json()["name"] == "Test User"
-    # Verify the service was called with the user_id from the JWT (driver is positional)
-    mock_get_user.assert_called_once_with(ANY, "test-user-id")
-
-
-def test_update_my_profile_success(auth):
-    """PUT /users/me should update the user's profile and return the updated data."""
-    update_payload = {"name": "Updated Name", "email": "new@example.com"}
-    updated_user_from_db = {"id": "test-user-id", **update_payload}
-
-    with patch("app.api.routes_users.user_service.update_user", return_value=updated_user_from_db) as mock_update:
-        res = client.put("/api/v1/users/me", json=update_payload)
-
-    assert res.status_code == 200
-    assert res.json()["name"] == "Updated Name"
-    assert res.json()["email"] == "new@example.com"
-    # Verify the service was called with the correct user_id and fields
-    mock_update.assert_called_once_with(ANY, "test-user-id", "Updated Name", "new@example.com")
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 4 — Auth endpoints
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_register_success():
-    """POST /auth/register creates a user and returns a JWT token."""
-    mock_created = {"id": "new001", "name": "Bob", "email": "bob@test.com"}
-    with patch("app.api.routes_auth.user_repo.get_user_by_email", return_value=None), \
-         patch("app.api.routes_auth.user_repo.create_user_with_password", return_value=mock_created):
-        res = client.post("/api/v1/auth/register", json={
-            "name": "Bob",
-            "email": "bob@test.com",
-            "password": "secret123",
-        })
-    assert res.status_code == 201
-    data = res.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
-
-
-def test_register_duplicate_email_returns_409():
-    """POST /auth/register with an already-registered email returns 409."""
-    existing = {"id": "old001", "name": "Bob", "email": "bob@test.com"}
-    with patch("app.api.routes_auth.user_repo.get_user_by_email", return_value=existing):
-        res = client.post("/api/v1/auth/register", json={
-            "name": "Bob Again",
-            "email": "bob@test.com",
-            "password": "secret123",
-        })
-    assert res.status_code == 409
-
-
-def test_login_success():
-    """POST /auth/token with correct credentials returns a JWT token."""
-    from app.core.auth import hash_password
-    hashed = hash_password("secret123")
-    mock_user = {"id": "usr001", "name": "Bob", "email": "bob@test.com", "password_hash": hashed}
-
-    with patch("app.api.routes_auth.user_repo.get_user_by_email", return_value=mock_user):
-        res = client.post("/api/v1/auth/token", data={
-            "username": "bob@test.com",
-            "password": "secret123",
-        })
-    assert res.status_code == 200
-    assert "access_token" in res.json()
-
-
-def test_login_wrong_password_returns_401():
-    """POST /auth/token with wrong password returns 401."""
-    from app.core.auth import hash_password
-    hashed = hash_password("correct-password")
-    mock_user = {"id": "usr001", "name": "Bob", "email": "bob@test.com", "password_hash": hashed}
-
-    with patch("app.api.routes_auth.user_repo.get_user_by_email", return_value=mock_user):
-        res = client.post("/api/v1/auth/token", data={
-            "username": "bob@test.com",
-            "password": "wrong-password",
-        })
-    assert res.status_code == 401
-
-
-def test_login_unknown_email_returns_401():
-    """POST /auth/token with an unrecognised email returns 401."""
-    with patch("app.api.routes_auth.user_repo.get_user_by_email", return_value=None):
-        res = client.post("/api/v1/auth/token", data={
-            "username": "ghost@nowhere.com",
-            "password": "anything",
-        })
-    assert res.status_code == 401
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 5 — JWT guard on protected endpoints
-# ═══════════════════════════════════════════════════════════════════════════
-
-@pytest.mark.parametrize("method, path, json_payload", [
-    ("GET", "/api/v1/path/0/150", None),
-    ("GET", "/api/v1/suggestions/0", None),
-    ("GET", "/api/v1/suggestions/me", None),
-    ("GET", "/api/v1/users/me", None),
-    ("PUT", "/api/v1/users/me", {"name": "test"}),
-    ("POST", "/api/v1/connections", {"user_id_1": "0", "user_id_2": "1"}),
-    ("POST", "/friends/100", None),
-    ("DELETE", "/friends/100", None),
-])
-def test_protected_endpoints_require_auth(method, path, json_payload):
-    """Protected endpoints must return 401 Unauthorized without a valid token."""
-    res = client.request(method, path, json=json_payload)
-    assert res.status_code == 401
-    detail = res.json()["detail"]
-    assert "not authenticated" in detail.lower() or "could not validate" in detail.lower()
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 6 — Graph Endpoints (authenticated)
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_path_returns_cached_result(auth):
-    """When Redis has a cached entry, return it immediately with cached=True."""
-    cached = {
-        "start_user": "0", "end_user": "150",
-        "path": ["0", "107", "150"],
-        "hops": 2, "cached": False,
+def _register_payload(**overrides):
+    return {
+        "name": "Alice",
+        "email": "alice@example.com",
+        "password": "a-long-password",
+        **overrides,
     }
-    with patch("app.services.pathfinder.redis_cache.get_cached_path", return_value=cached):
-        res = client.get("/api/v1/path/0/150")
-
-    assert res.status_code == 200
-    data = res.json()
-    assert data["hops"] == 2
-    assert data["path"] == ["0", "107", "150"]
-    assert data["cached"] is True          # pathfinder flips this on cache hit
 
 
-def test_path_queries_neo4j_on_cache_miss(auth):
-    """On a cache miss, Neo4j is queried and the result is cached."""
-    with patch("app.services.pathfinder.redis_cache.get_cached_path", return_value=None), \
-         patch("app.services.pathfinder.graph_repo.find_shortest_path", return_value=["0", "107", "150"]), \
-         patch("app.services.pathfinder.redis_cache.set_cached_path") as mock_set:
-        res = client.get("/api/v1/path/0/150")
-
-    assert res.status_code == 200
-    data = res.json()
-    assert data["hops"] == 2
-    assert data["cached"] is False         # came from Neo4j, not cache
-    mock_set.assert_called_once()          # result was stored in Redis
+def test_health_check_is_live_without_dependencies():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
-def test_path_not_found_returns_404(auth):
-    """When no path exists, the endpoint returns 404."""
-    with patch("app.services.pathfinder.redis_cache.get_cached_path", return_value=None), \
-         patch("app.services.pathfinder.graph_repo.find_shortest_path", return_value=None):
-        res = client.get("/api/v1/path/0/9999")
-    assert res.status_code == 404
+def test_content_security_policy_and_security_headers_are_set():
+    response = client.get("/health")
+    policy = response.headers["content-security-policy"]
+    assert "default-src 'self'" in policy
+    assert "script-src 'self'" in policy
+    assert "style-src 'self' 'unsafe-inline'" in policy
+    assert "connect-src 'self'" in policy
+    assert "frame-ancestors 'none'" in policy
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
 
 
-def test_create_connection_success(auth):
-    """POST /connections creates a link and returns a confirmation message."""
-    with patch("app.api.routes_graph.graph_repo.create_connection") as mock_create:
-        res = client.post("/api/v1/connections", json={"user_id_1": "0", "user_id_2": "1"})
-    assert res.status_code == 201
-    assert "created" in res.json()["message"].lower()
-    mock_create.assert_called_once()
+def test_removed_user_creation_and_arbitrary_connections_routes():
+    assert client.post("/api/v1/users/", json={}).status_code in {404, 405}
+    assert client.post(
+        "/api/v1/connections", json={"user_id_1": "a", "user_id_2": "b"}
+    ).status_code in {404, 405}
 
 
-def test_get_suggestions_for_user_id_returns_list(auth):
-    """GET /suggestions/{user_id} returns ranked friend-of-friend suggestions."""
-    mock_raw = [("200", 5), ("300", 3), ("400", 1)]
-    with patch("app.services.pathfinder.graph_repo.get_friend_suggestions", return_value=mock_raw):
-        res = client.get("/api/v1/suggestions/0")
-    assert res.status_code == 200
-    data = res.json()
-    assert data["user_id"] == "0"
-    assert len(data["suggestions"]) == 3
-    assert data["suggestions"][0]["user_id"] == "200"
-    assert data["suggestions"][0]["mutual_friends"] == 5
+def test_register_validates_payload_before_service_call():
+    response = client.post(
+        "/api/v1/auth/register", json=_register_payload(password="short")
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert all("input" not in item for item in response.json()["error"]["details"])
 
 
-def test_get_my_suggestions_uses_jwt_user_id(auth):
-    """GET /suggestions/me should call the service with the user ID from the JWT."""
-    with patch("app.api.routes_graph.pathfinder.get_suggestions") as mock_get_suggestions:
-        # Mock the service layer function called by the router
-        mock_get_suggestions.return_value = {
-            "user_id": "test-user-id",
-            "suggestions": [{"user_id": "200", "mutual_friends": 5}]
-        }
-        res = client.get("/api/v1/suggestions/me")
+def test_register_delegates_and_returns_token_contract(monkeypatch):
+    previous = app.dependency_overrides.copy()
+    app.dependency_overrides[get_driver] = lambda: object()
+    app.dependency_overrides[get_client] = RedisStub
+    result = {"access_token": "token", "token_type": "bearer", "expires_in": 1800}
+    received = {}
 
-    assert res.status_code == 200
-    assert res.json()["user_id"] == "test-user-id"
-    # Verify the service was called (driver is positional from DI)
-    mock_get_suggestions.assert_called_once()
+    def register(*_args, **kwargs):
+        received.update(kwargs)
+        return result
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 7 — Friend Management Endpoints (authenticated)
-# ═══════════════════════════════════════════════════════════════════════════
-
-def test_add_friend_success(auth):
-    """POST /friends/{id} connects the current user with another user."""
-    mock_user = {"id": "friend-1", "name": "Friend"}
-    with patch("app.api.routes_friends.user_repo.get_user_by_id", return_value=mock_user), \
-         patch("app.api.routes_friends.graph_repo.create_connection") as mock_conn:
-        res = client.post("/friends/friend-1")
-
-    assert res.status_code == 201
-    assert "connected with user 'friend-1'" in res.json()["message"]
-    mock_conn.assert_called_once()
+    monkeypatch.setattr("app.api.routes_auth.auth_service.register", register)
+    response = client.post(
+        "/api/v1/auth/register",
+        json=_register_payload(),
+        headers={"X-Forwarded-For": "198.51.100.55"},
+    )
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous)
+    assert response.status_code == 201
+    assert response.json() == result
+    assert received["client_ip"] == "testclient"
 
 
-def test_add_friend_cannot_add_self(auth):
-    """POST /friends/{my_id} returns 400 Bad Request."""
-    res = client.post("/friends/test-user-id")
-    assert res.status_code == 400
-    assert "cannot add yourself" in res.json()["detail"].lower()
+def test_rate_limit_error_uses_http_retry_after_header(monkeypatch):
+    previous = app.dependency_overrides.copy()
+    app.dependency_overrides[get_client] = RedisStub
+
+    def limited(*_args, **_kwargs):
+        raise RateLimitedError(35)
+
+    monkeypatch.setattr("app.api.routes_auth.auth_service.register", limited)
+    response = client.post("/api/v1/auth/register", json=_register_payload())
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous)
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "35"
+    assert response.json()["error"]["code"] == "RATE_LIMITED"
 
 
-def test_remove_friend_success(auth):
-    """DELETE /friends/{id} removes the connection."""
-    with patch("app.api.routes_friends.graph_repo.remove_connection") as mock_remove:
-        res = client.delete("/friends/friend-1")
+def test_unknown_and_wrong_credentials_have_identical_error_envelope(monkeypatch):
+    previous = app.dependency_overrides.copy()
+    app.dependency_overrides[get_client] = RedisStub
 
-    assert res.status_code == 200
-    assert "removed" in res.json()["message"]
-    mock_remove.assert_called_once()
+    def invalid_credentials(*_args, **_kwargs):
+        raise AppError("UNAUTHENTICATED", "Incorrect email or password.", 401)
+
+    monkeypatch.setattr("app.api.routes_auth.auth_service.login", invalid_credentials)
+    headers = {"X-Request-ID": "same-request-id"}
+    first = client.post(
+        "/api/v1/auth/token",
+        data={"username": "known@example.com", "password": "wrong"},
+        headers=headers,
+    )
+    second = client.post(
+        "/api/v1/auth/token",
+        data={"username": "missing@example.com", "password": "wrong"},
+        headers=headers,
+    )
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous)
+    assert first.status_code == second.status_code == 401
+    assert first.json() == second.json()
 
 
-def test_remove_friend_cannot_remove_self(auth):
-    """DELETE /friends/{my_id} returns 400 Bad Request."""
-    res = client.delete("/friends/test-user-id")
-    assert res.status_code == 400
-    assert "cannot remove yourself" in res.json()["detail"].lower()
+def test_login_fails_closed_when_redis_is_unavailable():
+    previous = app.dependency_overrides.copy()
+    app.dependency_overrides[get_client] = BrokenRedis
+    response = client.post(
+        "/api/v1/auth/token",
+        data={"username": "alice@example.com", "password": "some-password"},
+    )
+    app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous)
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "UNAVAILABLE"
 
+
+def test_search_fails_open_when_redis_is_unavailable(authenticated_client):
+    app.dependency_overrides[get_client] = BrokenRedis
+    with patch(
+        "app.api.routes_users.user_service.search_users",
+        return_value=[{"id": "friend", "name": "Friend", "source": "snap"}],
+    ):
+        response = authenticated_client.get("/api/v1/users/search?q=fr")
+    assert response.status_code == 200
+
+
+def test_public_profile_requires_auth_and_never_returns_email(authenticated_client):
+    public_user = {"id": "friend", "name": "Friend", "source": "app"}
+    with patch("app.api.routes_users.user_service.get_user", return_value=public_user):
+        response = authenticated_client.get("/api/v1/users/friend")
+    assert response.status_code == 200
+    assert "email" not in response.json()
+    assert "password_hash" not in response.json()
+
+
+def test_public_profile_remains_available_when_redis_is_down(authenticated_client):
+    app.dependency_overrides[get_client] = BrokenRedis
+    with patch(
+        "app.api.routes_users.user_service.get_user",
+        return_value={"id": "friend", "name": "Friend", "source": "snap"},
+    ):
+        response = authenticated_client.get("/api/v1/users/friend")
+    assert response.status_code == 200
+
+
+def test_search_is_protected_and_uses_public_projection(authenticated_client):
+    users = [{"id": "friend", "name": "Friend", "source": "snap"}]
+    with patch("app.api.routes_users.user_service.search_users", return_value=users):
+        response = authenticated_client.get("/api/v1/users/search?q=fr")
+    assert response.status_code == 200
+    assert response.json()["items"] == users
+    assert response.json()["total"] is None
+    assert "email" not in response.text
+    assert "password_hash" not in response.text
+
+
+def test_search_rejects_whitespace_only_query_after_trimming(authenticated_client):
+    with patch("app.services.user_service.user_repo.search_users") as search:
+        response = authenticated_client.get("/api/v1/users/search?q=%20%20")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    search.assert_not_called()
+
+
+def test_own_profile_can_include_only_own_email(authenticated_client):
+    profile = {
+        "id": "test-user",
+        "name": "Alice",
+        "source": "app",
+        "email": "alice@example.com",
+    }
+    with patch(
+        "app.api.routes_users.user_service.get_own_profile", return_value=profile
+    ):
+        response = authenticated_client.get("/api/v1/users/me")
+    assert response.status_code == 200
+    assert response.json()["email"] == profile["email"]
+    assert "password_hash" not in response.text
+
+
+def test_profile_update_changes_name_only(authenticated_client):
+    profile = {
+        "id": "test-user",
+        "name": "Alicia",
+        "source": "app",
+        "email": "alice@example.com",
+    }
+    with (
+        patch(
+            "app.api.routes_users.user_service.update_own_profile", return_value=profile
+        ) as update,
+    ):
+        response = authenticated_client.put("/api/v1/users/me", json={"name": "Alicia"})
+    assert response.status_code == 200
+    update.assert_called_once_with(ANY, "test-user", "Alicia")
+    assert response.json()["email"] == "alice@example.com"
+    rejected = authenticated_client.put(
+        "/api/v1/users/me", json={"name": "Alicia", "email": "other@example.com"}
+    )
+    assert rejected.status_code == 422
+
+
+def test_protected_user_routes_reject_missing_token():
+    for path in (
+        "/api/v1/users/me",
+        "/api/v1/users/x",
+        "/api/v1/users/search?q=ab",
+        "/api/v1/path/a/b",
+        "/api/v1/suggestions/me",
+        "/api/v1/users/a/suggestions",
+    ):
+        response = client.get(path)
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+
+
+def test_current_user_rejects_token_for_deleted_user(monkeypatch):
+    from app.repositories import user_repo
+
+    monkeypatch.setattr(user_repo, "user_exists", lambda *_args: False)
+    response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {create_access_token('deleted-user')}"},
+    )
+    assert response.status_code == 401
+
+
+def test_current_user_rejects_non_object_jwt_payload(monkeypatch):
+    monkeypatch.setattr("app.api.deps.decode_access_token", lambda _token: [])
+    response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {create_access_token('user')}"},
+    )
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+
+
+def test_path_endpoint_returns_named_nodes_from_path_service(authenticated_client):
+    path = {
+        "start_user": "0",
+        "end_user": "150",
+        "path": [
+            {"id": "0", "name": "User 0"},
+            {"id": "107", "name": "User 107"},
+            {"id": "150", "name": "User 150"},
+        ],
+        "hops": 2,
+        "cached": False,
+    }
+    with patch(
+        "app.api.routes_graph.path_service.find_path", return_value=path
+    ) as find_path:
+        response = authenticated_client.get("/api/v1/path/0/150")
+    assert response.status_code == 200
+    assert response.json()["cached"] is False
+    assert response.json()["path"][0] == {"id": "0", "name": "User 0"}
+    find_path.assert_called_once_with(ANY, "0", "150", ANY)
+
+
+@pytest.mark.parametrize(
+    ("neo4j_code", "expected_status", "expected_code"),
+    [
+        ("Neo.ClientError.Transaction.TransactionTimedOut", 504, "UNAVAILABLE"),
+        ("Neo.ClientError.Statement.SyntaxError", 500, "INTERNAL"),
+    ],
+)
+def test_path_query_timeout_maps_to_gateway_timeout_only(
+    authenticated_client, monkeypatch, neo4j_code, expected_status, expected_code
+):
+    timeout = Neo4jError._hydrate_neo4j(
+        code=neo4j_code, message="database error for test"
+    )
+    monkeypatch.setattr(
+        "app.api.routes_graph.path_service.find_path", Mock(side_effect=timeout)
+    )
+
+    response = authenticated_client.get("/api/v1/path/start/end")
+
+    assert isinstance(timeout, Neo4jError)
+    if neo4j_code == "Neo.ClientError.Transaction.TransactionTimedOut":
+        assert type(timeout).__name__ == "ClientError"
+    assert response.status_code == expected_status
+    assert response.json()["error"]["code"] == expected_code
+
+
+def test_suggestions_routes_use_paged_recommendation_service(authenticated_client):
+    suggestions = {
+        "user_id": "test-user",
+        "suggestions": [{"user_id": "friend", "name": "Friend", "mutual_friends": 3}],
+        "limit": 5,
+        "offset": 2,
+    }
+    with patch(
+        "app.api.routes_graph.recommendation_service.get_suggestions",
+        return_value=suggestions,
+    ) as get_suggestions:
+        response = authenticated_client.get("/api/v1/suggestions/me?limit=5&offset=2")
+        other = authenticated_client.get(
+            "/api/v1/users/target/suggestions?limit=5&offset=2"
+        )
+    assert response.status_code == 200
+    assert response.json()["items"][0]["name"] == "Friend"
+    assert response.json()["limit"] == 5
+    assert other.status_code == 200
+    assert get_suggestions.call_args_list == [
+        call(ANY, "test-user", offset=2, limit=5),
+        call(ANY, "target", offset=2, limit=5),
+    ]
+    assert client.get("/api/v1/suggestions/target").status_code == 404
+
+
+def test_friend_route_remains_scoped_to_authenticated_caller(authenticated_client):
+    with (
+        patch.object(
+            app.state.friend_service, "add_friend", return_value={"created": True}
+        ) as add_friend,
+    ):
+        response = authenticated_client.post("/api/v1/friends/friend")
+    assert response.status_code == 201
+    add_friend.assert_called_once_with(ANY, "test-user", "friend")
+
+
+def test_friend_endpoints_are_versioned_authenticated_and_validate_ids(
+    authenticated_client,
+):
+    with (
+        patch.object(
+            app.state.friend_service,
+            "list_friends",
+            return_value=[{"id": "friend", "name": "Friend", "source": "app"}],
+        ) as list_friends,
+        patch.object(
+            app.state.friend_service,
+            "remove_friend",
+            return_value={"removed": False},
+        ) as remove_friend,
+        patch.object(
+            app.state.friend_service, "mutual_friends", return_value=[]
+        ) as mutual_friends,
+    ):
+        friends = authenticated_client.get("/api/v1/friends?limit=1&offset=0")
+        removed = authenticated_client.delete("/api/v1/friends/friend")
+        mutual = authenticated_client.get("/api/v1/users/friend/mutual")
+        malformed = authenticated_client.post("/api/v1/friends/%27")
+
+    assert friends.status_code == 200
+    assert friends.json()["items"][0]["id"] == "friend"
+    assert removed.json() == {"removed": False}
+    assert mutual.json()["items"] == []
+    assert malformed.status_code == 422
+    assert malformed.json()["error"]["code"] == "VALIDATION_ERROR"
+    list_friends.assert_called_once_with(ANY, "test-user", offset=0, limit=1)
+    remove_friend.assert_called_once_with(ANY, "test-user", "friend")
+    mutual_friends.assert_called_once_with(
+        ANY, "test-user", "friend", offset=0, limit=20
+    )
+
+
+def test_unversioned_friend_routes_are_removed():
+    for method in (client.get, client.post, client.delete):
+        response = method("/friends/someone")
+        assert response.status_code == 404

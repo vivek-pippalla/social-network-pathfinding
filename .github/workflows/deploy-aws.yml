@@ -1,0 +1,81 @@
+name: Optional AWS release packaging
+
+# Phase 15 only: this workflow packages a release and uploads it to S3.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to package (for example v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-demo-package
+  cancel-in-progress: false
+
+jobs:
+  package-release:
+    name: Package tagged release to S3 (optional)
+    if: ${{ vars.AWS_DEMO_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: aws-demo
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Validate release tag input
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Input must be a version tag such as v1.0.0" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm selected tag exists in this repository
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}"
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEMO_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_DEMO_REGION }}
+          role-session-name: pathfinding-release-package
+      - name: Create release archive and checksum
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          archive="pathfinding-${RELEASE_TAG}.tgz"
+          git archive --format=tar.gz --prefix=pathfinding/ \
+            "refs/tags/${RELEASE_TAG}" > "$archive"
+          sha256sum "$archive" > "$archive.sha256"
+      - name: Upload and verify release archive
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          ARTIFACT_BUCKET: ${{ vars.AWS_DEMO_ARTIFACT_BUCKET }}
+        run: |
+          if [[ -z "$ARTIFACT_BUCKET" ]]; then
+            echo "Repository variable AWS_DEMO_ARTIFACT_BUCKET is required" >&2
+            exit 1
+          fi
+          archive="pathfinding-${RELEASE_TAG}.tgz"
+          prefix="s3://${ARTIFACT_BUCKET}/artifacts/${RELEASE_TAG}"
+          aws s3 cp "$archive" "$prefix/$archive"
+          aws s3 cp "$archive.sha256" "$prefix/$archive.sha256"
+          aws s3 cp "$prefix/$archive" downloaded.tgz
+          sed "s|$archive|downloaded.tgz|" "$archive.sha256" | sha256sum --check --status
+          {
+            echo "### Bundle uploaded and verified"
+            echo "On the instance: aws s3 cp ${prefix}/${archive} . && sha256sum -c ${archive}.sha256"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Report failure
+        if: failure()
+        run: echo "### Packaging failed. Nothing was uploaded or deployed." >> "$GITHUB_STEP_SUMMARY"

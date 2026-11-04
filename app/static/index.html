@@ -1,541 +1,91 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Social Network Pathfinder</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:       #0d0d1a;
-      --surface:  #13132b;
-      --border:   #2a2a4a;
-      --blue:     #4f8ef7;
-      --blue-dim: rgba(79,142,247,.12);
-      --green:    #34d399;
-      --red:      #f87171;
-      --text:     #e2e2f0;
-      --muted:    #6b6b8a;
-      --radius:   10px;
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── Header ─────────────────────────────────────────────────────── */
-    header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    header h1 { font-size: 1.15rem; color: var(--blue); letter-spacing: -.3px; }
-    .stack-badge {
-      font-size: .72rem;
-      color: var(--blue);
-      background: var(--blue-dim);
-      border: 1px solid rgba(79,142,247,.3);
-      padding: 3px 10px;
-      border-radius: 20px;
-    }
-    .hdr-right { display: flex; align-items: center; gap: 10px; }
-    #userTag { font-size: .82rem; color: var(--muted); }
-    .btn-logout {
-      font-size: .8rem;
-      padding: 5px 12px;
-      background: transparent;
-      border: 1px solid rgba(248,113,113,.4);
-      color: var(--red);
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .btn-logout:hover { background: rgba(248,113,113,.1); }
-
-    /* ── Auth overlay ────────────────────────────────────────────────── */
-    #authOverlay {
-      position: fixed; inset: 0;
-      background: var(--bg);
-      z-index: 200;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .auth-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 40px 36px;
-      width: 360px;
-    }
-    .auth-card h2 { color: var(--blue); font-size: 1.3rem; margin-bottom: 6px; }
-    .auth-card p  { color: var(--muted); font-size: .85rem; margin-bottom: 22px; }
-
-    /* ── Tabs ───────────────────────────────────────────────────────── */
-    .tabs { display: flex; gap: 6px; margin-bottom: 20px; }
-    .tab {
-      flex: 1; padding: 8px 0;
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: .88rem;
-      transition: all .15s;
-    }
-    .tab.active {
-      background: var(--blue-dim);
-      border-color: rgba(79,142,247,.5);
-      color: var(--blue);
-      font-weight: 600;
-    }
-
-    /* ── Form elements ──────────────────────────────────────────────── */
-    input {
-      display: block; width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 9px 13px;
-      border-radius: 8px;
-      font-size: .9rem;
-      margin-bottom: 10px;
-      outline: none;
-      transition: border-color .15s;
-    }
-    input:focus { border-color: var(--blue); }
-    input::placeholder { color: var(--muted); }
-
-    .btn {
-      display: block; width: 100%;
-      padding: 10px;
-      background: var(--blue);
-      border: none; border-radius: 8px;
-      color: #fff; font-size: .92rem; font-weight: 600;
-      cursor: pointer;
-      transition: opacity .15s;
-      margin-top: 4px;
-    }
-    .btn:hover { opacity: .88; }
-    .btn:disabled { opacity: .45; cursor: default; }
-    .btn-row { display: flex; gap: 8px; }
-    .btn-row .btn { flex: 1; }
-
-    /* ── Alerts ─────────────────────────────────────────────────────── */
-    .alert {
-      padding: 9px 13px;
-      border-radius: 8px;
-      font-size: .85rem;
-      margin-bottom: 10px;
-    }
-    .alert-err  { background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.3); color: var(--red); }
-    .alert-info { background: var(--blue-dim);       border: 1px solid rgba(79,142,247,.3);  color: var(--blue); }
-
-    /* ── Main layout ────────────────────────────────────────────────── */
-    main {
-      flex: 1;
-      max-width: 960px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 32px 24px;
-    }
-
-    /* ── Section label ──────────────────────────────────────────────── */
-    .section-title { font-size: 1rem; font-weight: 600; color: var(--blue); }
-    .section-sub   { font-size: .82rem; color: var(--muted); margin-top: 2px; margin-bottom: 18px; }
-
-    /* ── Input row ──────────────────────────────────────────────────── */
-    .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
-    .input-row input { flex: 1; margin-bottom: 0; }
-    .input-row .btn  { flex: 0 0 auto; width: auto; padding: 9px 20px; }
-
-    /* ── Path result ────────────────────────────────────────────────── */
-    .path-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-    .hops-pill {
-      background: var(--blue-dim);
-      border: 1px solid rgba(79,142,247,.35);
-      color: var(--blue);
-      font-weight: 700; font-size: .9rem;
-      padding: 4px 14px; border-radius: 20px;
-    }
-    .cached-pill {
-      background: rgba(52,211,153,.1);
-      border: 1px solid rgba(52,211,153,.3);
-      color: var(--green);
-      font-size: .78rem; font-weight: 600;
-      padding: 3px 10px; border-radius: 20px;
-    }
-    .live-pill {
-      background: rgba(248,113,113,.1);
-      border: 1px solid rgba(248,113,113,.3);
-      color: var(--red);
-      font-size: .78rem; font-weight: 600;
-      padding: 3px 10px; border-radius: 20px;
-    }
-    .path-chain { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-    .pnode {
-      font-family: monospace; font-size: .88rem;
-      padding: 4px 12px; border-radius: 6px;
-      border: 1px solid rgba(79,142,247,.4);
-      background: var(--blue-dim); color: var(--blue);
-    }
-    .pnode.start { border-color: rgba(52,211,153,.5); background: rgba(52,211,153,.1); color: var(--green); }
-    .pnode.end   { border-color: rgba(248,113,113,.5); background: rgba(248,113,113,.1); color: var(--red); }
-    .arrow { color: var(--muted); font-size: .85rem; }
-
-    /* ── Graph canvas ───────────────────────────────────────────────── */
-    #graphWrap {
-      display: none;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
-      height: 340px;
-      margin-top: 16px;
-      overflow: hidden;
-    }
-
-    /* ── Suggestion cards ───────────────────────────────────────────── */
-    .scard {
-      display: flex; align-items: center; justify-content: space-between;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 11px 16px;
-      margin-bottom: 8px;
-    }
-    .scard-name { font-size: .9rem; }
-    .mutual-pill {
-      font-size: .78rem;
-      color: var(--blue);
-      background: var(--blue-dim);
-      border: 1px solid rgba(79,142,247,.3);
-      padding: 2px 10px; border-radius: 12px;
-    }
-
-    /* ── Divider ────────────────────────────────────────────────────── */
-    hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
-
-    /* ── Spinner ────────────────────────────────────────────────────── */
-    .spin { color: var(--muted); font-style: italic; font-size: .88rem; }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore shortest paths and friendships in a social graph.">
+  <title>Pathfinder Social</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script defer src="/static/vendor/vis-network/vis-network.min.js"></script>
+  <script type="module" src="/static/js/app.js"></script>
 </head>
 <body>
-
-<!-- ─── Auth Overlay ────────────────────────────────────────────────────── -->
-<div id="authOverlay">
-  <div class="auth-card">
-    <h2>Social Network Pathfinder</h2>
-    <p>Sign in to explore connections across 4,039 real Facebook users.</p>
-
-    <div class="tabs">
-      <button class="tab active" id="tabLogin" onclick="authTab('login')">Login</button>
-      <button class="tab"        id="tabReg"   onclick="authTab('register')">Register</button>
-    </div>
-
-    <!-- Login form -->
-    <div id="loginForm">
-      <input type="email"    id="lEmail" placeholder="Email address" />
-      <input type="password" id="lPass"  placeholder="Password" />
-      <div id="loginErr" class="alert alert-err" style="display:none"></div>
-      <button class="btn" onclick="doLogin()">Login</button>
-    </div>
-
-    <!-- Register form -->
-    <div id="regForm" style="display:none">
-      <input type="text"     id="rName"  placeholder="Your name" />
-      <input type="email"    id="rEmail" placeholder="Email address" />
-      <input type="password" id="rPass"  placeholder="Password (min 6 chars)" />
-      <div id="regErr" class="alert alert-err" style="display:none"></div>
-      <button class="btn" onclick="doRegister()">Create Account</button>
-    </div>
-
-    <hr />
-    <p style="text-align:center; font-size:.75rem; color:var(--muted);">
-      Stanford SNAP dataset · 88,234 real connections
-    </p>
-  </div>
-</div>
-
-<!-- ─── App Shell ───────────────────────────────────────────────────────── -->
-<header>
-  <h1>&#9906; Social Network Pathfinder</h1>
-  <div class="hdr-right">
-    <span class="stack-badge">Neo4j · Redis · FastAPI</span>
-    <span id="userTag"></span>
-    <button class="btn-logout" onclick="doLogout()">Logout</button>
-  </div>
-</header>
-
-<main>
-  <!-- ── Tab nav ── -->
-  <div class="tabs" style="margin-bottom:28px;">
-    <button class="tab active" id="navPath" onclick="appTab('path')">Path Finder</button>
-    <button class="tab"        id="navSugg" onclick="appTab('suggestions')">Friend Suggestions</button>
-  </div>
-
-  <!-- ══ PATH TAB ══════════════════════════════════════════════════════ -->
-  <div id="pathTab">
-    <div class="section-title">Shortest Path Between Users</div>
-    <div class="section-sub">
-      Finds the minimum hops using Neo4j's bidirectional BFS. Results cached in Redis.
-      Try <strong>0 → 1000</strong> then run it again to see a cache hit.
-    </div>
-
-    <div class="input-row">
-      <input type="text" id="startId" placeholder="Start user ID  (e.g. 0)"    value="0" />
-      <input type="text" id="endId"   placeholder="End user ID    (e.g. 1000)" value="1000" />
-      <button class="btn" id="pathBtn" onclick="findPath()">Find Path</button>
-    </div>
-
-    <div id="pathResult"></div>
-    <div id="graphWrap"></div>
-  </div>
-
-  <!-- ══ SUGGESTIONS TAB ═══════════════════════════════════════════════ -->
-  <div id="suggTab" style="display:none">
-    <div class="section-title">Friend Suggestions — People You May Know</div>
-    <div class="section-sub">
-      2-hop friends-of-friends ranked by mutual connection count (Triadic Closure).
-      Same algorithm as LinkedIn's "People You May Know". Try user <strong>0</strong>.
-    </div>
-
-    <div class="input-row">
-      <input type="text" id="suggId" placeholder="User ID  (e.g. 0)" value="0" />
-      <button class="btn" onclick="getSuggestions()">Get Suggestions</button>
-    </div>
-
-    <div id="suggResult"></div>
-  </div>
-</main>
-
-<!-- vis.js loaded from CDN -->
-<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
-<script>
-  'use strict';
-
-  const API = '';   // same origin
-  let token = sessionStorage.getItem('snp_token');
-  let visNetwork = null;
-
-  /* ── bootstrap ─────────────────────────────────────────────────────── */
-  if (token) showApp();
-
-  /* ── auth tab toggle ────────────────────────────────────────────────── */
-  function authTab(tab) {
-    document.getElementById('loginForm').style.display = tab === 'login'    ? '' : 'none';
-    document.getElementById('regForm'  ).style.display = tab === 'register' ? '' : 'none';
-    document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
-    document.getElementById('tabReg'  ).classList.toggle('active', tab === 'register');
-    clearErr('loginErr'); clearErr('regErr');
-  }
-
-  /* ── register ───────────────────────────────────────────────────────── */
-  async function doRegister() {
-    const name  = val('rName');
-    const email = val('rEmail');
-    const pass  = val('rPass');
-    if (!name || !email || !pass) { showErr('regErr', 'All fields required.'); return; }
-    if (pass.length < 6)          { showErr('regErr', 'Password needs 6+ characters.'); return; }
-
-    const res = await apiFetch('/api/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password: pass }),
-    });
-    if (!res.ok) { const e = await res.json(); showErr('regErr', e.detail || 'Registration failed.'); return; }
-    const data = await res.json();
-    storeToken(data.access_token, name);
-    showApp();
-  }
-
-  /* ── login ──────────────────────────────────────────────────────────── */
-  async function doLogin() {
-    const email = val('lEmail');
-    const pass  = val('lPass');
-    if (!email || !pass) { showErr('loginErr', 'Enter email and password.'); return; }
-
-    const form = new URLSearchParams({ username: email, password: pass });
-    const res  = await apiFetch('/api/v1/auth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form,
-    });
-    if (!res.ok) { const e = await res.json(); showErr('loginErr', e.detail || 'Login failed.'); return; }
-    const data = await res.json();
-    storeToken(data.access_token, email);
-    showApp();
-  }
-
-  function doLogout() {
-    sessionStorage.removeItem('snp_token');
-    sessionStorage.removeItem('snp_user');
-    token = null;
-    document.getElementById('authOverlay').style.display = 'flex';
-  }
-
-  function storeToken(t, name) {
-    token = t;
-    sessionStorage.setItem('snp_token', t);
-    sessionStorage.setItem('snp_user', name);
-  }
-
-  function showApp() {
-    document.getElementById('authOverlay').style.display = 'none';
-    const u = sessionStorage.getItem('snp_user') || '';
-    document.getElementById('userTag').textContent = u ? `Logged in as ${u}` : '';
-  }
-
-  /* ── app tab toggle ─────────────────────────────────────────────────── */
-  function appTab(tab) {
-    document.getElementById('pathTab' ).style.display = tab === 'path'        ? '' : 'none';
-    document.getElementById('suggTab' ).style.display = tab === 'suggestions' ? '' : 'none';
-    document.getElementById('navPath' ).classList.toggle('active', tab === 'path');
-    document.getElementById('navSugg' ).classList.toggle('active', tab === 'suggestions');
-  }
-
-  /* ── path finder ────────────────────────────────────────────────────── */
-  async function findPath() {
-    const start = val('startId');
-    const end   = val('endId');
-    if (!start || !end) { setHtml('pathResult', alert('err', 'Enter both user IDs.')); return; }
-
-    setHtml('pathResult', '<p class="spin">Querying Neo4j via bidirectional BFS…</p>');
-    document.getElementById('graphWrap').style.display = 'none';
-    document.getElementById('pathBtn').disabled = true;
-
-    const res = await authFetch(`/distance/${encodeURIComponent(start)}/${encodeURIComponent(end)}`);
-    document.getElementById('pathBtn').disabled = false;
-
-    if (res.status === 401) { doLogout(); return; }
-    if (!res.ok) {
-      const e = await res.json();
-      setHtml('pathResult', alert('err', e.detail));
-      return;
-    }
-
-    const data = await res.json();
-    renderPathResult(data);
-    renderGraph(data.path);
-  }
-
-  function renderPathResult(data) {
-    const cachePill = data.cached
-      ? '<span class="cached-pill">CACHED (Redis)</span>'
-      : '<span class="live-pill">LIVE (Neo4j)</span>';
-
-    const chain = data.path.map((id, i) => {
-      const cls = i === 0 ? 'pnode start' : i === data.path.length - 1 ? 'pnode end' : 'pnode';
-      const arrow = i < data.path.length - 1 ? '<span class="arrow">›</span>' : '';
-      return `<span class="${cls}">${id}</span>${arrow}`;
-    }).join(' ');
-
-    setHtml('pathResult', `
-      <div class="path-meta">
-        <span class="hops-pill">${data.hops} hop${data.hops !== 1 ? 's' : ''}</span>
-        ${cachePill}
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#dashboard" aria-label="Pathfinder Social home">Pathfinder<span>Social</span></a>
+    <nav id="primary-nav" aria-label="Main navigation" hidden>
+      <button type="button" data-view="dashboard">Dashboard</button>
+      <button type="button" data-view="path">Find a path</button>
+      <button type="button" data-view="friends">Friends</button>
+      <button type="button" data-view="suggestions">Suggestions</button>
+      <button type="button" data-view="profile">Profile</button>
+    </nav>
+    <button id="logout" class="button button-quiet" type="button" hidden>Sign out</button>
+  </header>
+  <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
+  <main id="main" tabindex="-1">
+    <section id="auth-view" class="view" aria-labelledby="auth-title">
+      <div class="auth-panel">
+        <p class="eyebrow">A graph you can explore</p>
+        <h1 id="auth-title" tabindex="-1">Find your connection</h1>
+        <p class="muted">Sign in or create an account to explore paths, friends, and recommendations.</p>
+        <div class="segmented" role="group" aria-label="Account action">
+          <button id="show-login" type="button" aria-pressed="true">Sign in</button>
+          <button id="show-register" type="button" aria-pressed="false">Create account</button>
+        </div>
+        <form id="auth-form" novalidate>
+          <div id="name-field" hidden><label for="auth-name">Name</label><input id="auth-name" name="name" autocomplete="name" maxlength="100"></div>
+          <div><label for="auth-email">Email</label><input id="auth-email" name="email" type="email" autocomplete="email" required maxlength="254"></div>
+          <div><label for="auth-password">Password</label><input id="auth-password" name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128"></div>
+          <button class="button button-primary" type="submit">Continue</button>
+        </form>
       </div>
-      <div class="path-chain">${chain}</div>
-    `);
-  }
+    </section>
 
-  function renderGraph(path) {
-    const wrap = document.getElementById('graphWrap');
-    wrap.style.display = '';
-    if (visNetwork) { visNetwork.destroy(); visNetwork = null; }
-
-    const nodes = new vis.DataSet(path.map((id, i) => ({
-      id: i,
-      label: `User\n${id}`,
-      color: i === 0
-        ? { background: 'rgba(52,211,153,.18)', border: '#34d399', highlight: { background: 'rgba(52,211,153,.3)', border: '#34d399' } }
-        : i === path.length - 1
-        ? { background: 'rgba(248,113,113,.18)', border: '#f87171', highlight: { background: 'rgba(248,113,113,.3)', border: '#f87171' } }
-        : { background: 'rgba(79,142,247,.15)',  border: '#4f8ef7', highlight: { background: 'rgba(79,142,247,.25)', border: '#4f8ef7' } },
-      font: { color: '#e2e2f0', size: 13, face: 'monospace' },
-      shape: 'dot',
-      size: (i === 0 || i === path.length - 1) ? 24 : 18,
-    })));
-
-    const edges = new vis.DataSet(path.slice(0, -1).map((_, i) => ({
-      id: i, from: i, to: i + 1,
-      color:  { color: 'rgba(79,142,247,.45)', highlight: '#4f8ef7' },
-      width: 2,
-      label: 'connected',
-      font:  { color: '#6b6b8a', size: 10, align: 'middle' },
-      smooth: { type: 'cubicBezier', forceDirection: 'horizontal' },
-    })));
-
-    visNetwork = new vis.Network(wrap, { nodes, edges }, {
-      layout: {
-        hierarchical: {
-          enabled: true,
-          direction: 'LR',
-          sortMethod: 'directed',
-          levelSeparation: 160,
-          nodeSpacing: 90,
-        },
-      },
-      physics: false,
-      interaction: { hover: true, zoomView: true, dragView: true },
-      nodes: { borderWidth: 2, borderWidthSelected: 3 },
-    });
-  }
-
-  /* ── suggestions ────────────────────────────────────────────────────── */
-  async function getSuggestions() {
-    const userId = val('suggId');
-    if (!userId) { setHtml('suggResult', alert('err', 'Enter a user ID.')); return; }
-
-    setHtml('suggResult', '<p class="spin">Running 2-hop friend-of-friend query…</p>');
-
-    const res = await authFetch(`/suggestions/${encodeURIComponent(userId)}`);
-    if (res.status === 401) { doLogout(); return; }
-    if (!res.ok) { const e = await res.json(); setHtml('suggResult', alert('err', e.detail)); return; }
-
-    const data = await res.json();
-    if (!data.suggestions.length) {
-      setHtml('suggResult', alert('info', 'No suggestions found for this user.'));
-      return;
-    }
-
-    const cards = data.suggestions.map(s => `
-      <div class="scard">
-        <span class="scard-name">User <strong>${s.user_id}</strong></span>
-        <span class="mutual-pill">${s.mutual_friends} mutual friend${s.mutual_friends !== 1 ? 's' : ''}</span>
+    <section id="dashboard-view" class="view" aria-labelledby="dashboard-title" hidden>
+      <p class="eyebrow">Your network</p><h1 id="dashboard-title" tabindex="-1">Welcome, <span id="welcome-name"></span></h1>
+      <p class="muted">Choose a starting point. Find how two people connect, manage your friends, or discover new introductions.</p>
+      <p class="friend-count"><strong id="dashboard-friend-count">—</strong> friends in your network</p>
+      <div class="dashboard-grid">
+        <button class="feature-card" type="button" data-view="path"><span class="feature-icon" aria-hidden="true">↗</span><strong>Find a path</strong><span>See the shortest connection between two people.</span></button>
+        <button class="feature-card" type="button" data-view="friends"><span class="feature-icon" aria-hidden="true">◎</span><strong>Your friends</strong><span>Search, connect, and keep your network current.</span></button>
+        <button class="feature-card" type="button" data-view="suggestions"><span class="feature-icon" aria-hidden="true">✳</span><strong>Suggestions</strong><span>Meet people through mutual friends.</span></button>
       </div>
-    `).join('');
+    </section>
 
-    setHtml('suggResult', `
-      <p style="color:var(--muted); font-size:.82rem; margin-bottom:12px;">
-        ${data.suggestions.length} suggestion${data.suggestions.length !== 1 ? 's' : ''} for User ${data.user_id}
-      </p>
-      ${cards}
-    `);
-  }
+    <section id="path-view" class="view" aria-labelledby="path-title" hidden>
+      <p class="eyebrow">Connections</p><h1 id="path-title" tabindex="-1">Find a path</h1>
+      <p class="muted">Enter two user IDs to find their shortest known connection.</p>
+      <form id="path-form" class="form-row">
+        <div><label for="path-start">From person (name or ID)</label><input id="path-start" name="start" required maxlength="150" list="path-start-options" autocomplete="off"><datalist id="path-start-options"></datalist></div>
+        <div><label for="path-end">To person (name or ID)</label><input id="path-end" name="end" required maxlength="150" list="path-end-options" autocomplete="off"><datalist id="path-end-options"></datalist></div>
+        <button class="button button-primary" type="submit">Find path</button>
+      </form>
+      <div id="path-result" class="result-panel" aria-live="polite"></div>
+      <div id="path-network" class="network" role="img" aria-label="Visual diagram of the shortest path" hidden></div>
+    </section>
 
-  /* ── helpers ────────────────────────────────────────────────────────── */
-  function apiFetch(path, opts = {}) {
-    return fetch(API + path, opts).catch(() => ({ ok: false, status: 0, json: async () => ({ detail: 'Network error — is the API running?' }) }));
-  }
+    <section id="friends-view" class="view" aria-labelledby="friends-title" hidden>
+      <p class="eyebrow">Your network</p><h1 id="friends-title" tabindex="-1">Friends</h1>
+      <form id="search-form" class="form-row search-row"><div><label for="search-query">Find people by name</label><input id="search-query" name="q" minlength="2" maxlength="100" required autocomplete="off"></div><button class="button button-primary" type="submit">Search</button></form>
+      <div id="search-results" class="card-list" aria-live="polite"></div>
+      <h2 class="subheading">Your friends</h2><div id="friend-list" class="card-list" aria-live="polite"></div>
+      <button id="friends-more" class="button button-quiet" type="button" hidden>Load more friends</button>
+    </section>
 
-  function authFetch(path, opts = {}) {
-    return apiFetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` } });
-  }
+    <section id="suggestions-view" class="view" aria-labelledby="suggestions-title" hidden>
+      <p class="eyebrow">New introductions</p><h1 id="suggestions-title" tabindex="-1">Suggested for you</h1>
+      <p class="muted">People you may know through your existing friends.</p>
+      <div id="suggestion-list" class="card-list" aria-live="polite"></div>
+      <button id="suggestions-more" class="button button-quiet" type="button" hidden>Load more suggestions</button>
+      <div id="mutual-panel" class="result-panel" hidden><h2 id="mutual-title">Mutual friends</h2><div id="mutual-list" class="card-list"></div></div>
+    </section>
 
-  function val(id)           { return document.getElementById(id).value.trim(); }
-  function setHtml(id, html) { document.getElementById(id).innerHTML = html; }
-  function clearErr(id)      { const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; } }
-  function showErr(id, msg)  { const el = document.getElementById(id); el.textContent = msg; el.style.display = ''; }
-  function alert(type, msg)  { return `<div class="alert alert-${type === 'err' ? 'err' : 'info'}">${msg}</div>`; }
-</script>
+    <section id="profile-view" class="view" aria-labelledby="profile-title" hidden>
+      <p class="eyebrow">Account</p><h1 id="profile-title" tabindex="-1">Your profile</h1>
+      <form id="profile-form" class="stacked-form"><p class="muted">Account ID: <span id="profile-id"></span></p><div><label for="profile-name">Name</label><input id="profile-name" name="name" required minlength="1" maxlength="100" autocomplete="name"></div><div><label for="profile-email">Email</label><input id="profile-email" name="email" type="email" readonly></div><button class="button button-primary" type="submit">Save changes</button></form>
+    </section>
+  </main>
+  <footer><span>Social Network Pathfinder</span><span>Explore your degrees of connection</span></footer>
 </body>
 </html>
