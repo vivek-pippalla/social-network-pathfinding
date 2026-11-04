@@ -36,3 +36,8 @@ documentation/*
 docs/*
 !docs/API.md
 !docs/openapi.json
+!docs/DATABASE.md
+!docs/DEVELOPMENT.md
+!docs/TESTING.md
+!docs/DEPLOYMENT.md
+!docs/IMPLEMENTATION_STATUS.md

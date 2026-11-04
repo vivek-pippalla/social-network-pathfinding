@@ -56,6 +56,10 @@ submit the email in the `username` field. Send the returned token as
 `Authorization: Bearer <token>` to protected operations. Access tokens expire
 after 30 minutes.
 
+Tokens contain `sub` (user ID), `iat` (issued-at time), and `exp` (expiration)
+claims and are signed with the configured HS256 secret. Protected requests also
+check that the subject still exists in Neo4j.
+
 ## Errors
 
 Every non-success API response uses
@@ -85,6 +89,12 @@ for `/metrics` before proxying public traffic. Other reverse proxies must also
 deny this path instead of forwarding it. `/docs` and `/openapi.json` are
 available only when `ENABLE_DOCS` is enabled. `GET /health` is liveness;
 `GET /health/ready` checks Neo4j and reports Redis as `ok` or `degraded`.
+
+## Transport Security
+
+Caddy's behavior depends on `SITE_ADDRESS`: a hostname enables automatic
+HTTPS, while `:80` serves plain HTTP for IP-only demonstrations. Development
+can access the API directly on the local Compose port.
 """
     )
 
