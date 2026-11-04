@@ -160,9 +160,9 @@ def test_iam_policies_syntax_and_least_privilege():
 
         # 2. No hardcoded 12-digit account numbers
         match = twelve_digit_account_pattern.search(content)
-        assert (
-            match is None
-        ), f"Found potential 12-digit AWS account ID {match.group(0)} in {policy_file.name}"
+        assert match is None, (
+            f"Found potential 12-digit AWS account ID {match.group(0)} in {policy_file.name}"
+        )
 
         # 3. Check Statements for least-privilege constraints if this is an IAM policy
         if "Statement" in data:
@@ -172,20 +172,20 @@ def test_iam_policies_syntax_and_least_privilege():
                 if isinstance(actions, str):
                     actions = [actions]
                 for action in actions:
-                    assert (
-                        action != "s3:*"
-                    ), f"Disallowed wildcard action s3:* in {policy_file.name}"
-                    assert (
-                        action != "*"
-                    ), f"Disallowed global wildcard action in {policy_file.name}"
+                    assert action != "s3:*", (
+                        f"Disallowed wildcard action s3:* in {policy_file.name}"
+                    )
+                    assert action != "*", (
+                        f"Disallowed global wildcard action in {policy_file.name}"
+                    )
 
                 resources = stmt.get("Resource", [])
                 if isinstance(resources, str):
                     resources = [resources]
                 for resource in resources:
-                    assert (
-                        resource != "*"
-                    ), f"Disallowed universal wildcard resource '*' in {policy_file.name}"
+                    assert resource != "*", (
+                        f"Disallowed universal wildcard resource '*' in {policy_file.name}"
+                    )
 
 
 def test_compose_aws_overlay_merges_without_database_ports():
@@ -227,7 +227,9 @@ def test_compose_aws_overlay_merges_without_database_ports():
         text=True,
     )
     if result.returncode != 0:
-        pytest.skip(f"Docker engine unavailable or compose config failed: {result.stderr}")
+        pytest.skip(
+            f"Docker engine unavailable or compose config failed: {result.stderr}"
+        )
 
     config_data = json.loads(result.stdout)
     services = config_data.get("services", {})
@@ -244,23 +246,25 @@ def test_compose_aws_overlay_merges_without_database_ports():
 
     # Check that caddy publishes only port 80/443
     caddy_ports = caddy_svc.get("ports", [])
-    published_ports = [str(p.get("published")) for p in caddy_ports if isinstance(p, dict)]
+    published_ports = [
+        str(p.get("published")) for p in caddy_ports if isinstance(p, dict)
+    ]
     assert "80" in published_ports, "caddy must publish port 80"
 
     # Check logging driver on all services
     for svc_name in ("api", "neo4j", "redis", "caddy"):
         svc = services.get(svc_name, {})
         logging_config = svc.get("logging", {})
-        assert (
-            logging_config.get("driver") == "awslogs"
-        ), f"{svc_name} logging driver must be awslogs"
+        assert logging_config.get("driver") == "awslogs", (
+            f"{svc_name} logging driver must be awslogs"
+        )
         options = logging_config.get("options", {})
-        assert (
-            options.get("mode") == "non-blocking"
-        ), f"{svc_name} awslogs mode must be non-blocking"
-        assert (
-            options.get("max-buffer-size") == "4m"
-        ), f"{svc_name} awslogs max-buffer-size must be 4m"
+        assert options.get("mode") == "non-blocking", (
+            f"{svc_name} awslogs mode must be non-blocking"
+        )
+        assert options.get("max-buffer-size") == "4m", (
+            f"{svc_name} awslogs max-buffer-size must be 4m"
+        )
 
 
 def test_repository_has_no_committed_aws_secrets_or_pem_files():
@@ -273,20 +277,20 @@ def test_repository_has_no_committed_aws_secrets_or_pem_files():
     for scan_dir in (aws_dir, docs_dir):
         for root, dirs, files in os.walk(scan_dir):
             for file_name in files:
-                assert not file_name.endswith(
-                    ".pem"
-                ), f"Found committed .pem key file: {file_name}"
+                assert not file_name.endswith(".pem"), (
+                    f"Found committed .pem key file: {file_name}"
+                )
                 file_path = Path(root) / file_name
                 try:
                     text = file_path.read_text(encoding="utf-8")
                 except UnicodeDecodeError:
                     continue  # binary file
-                assert not secret_key_pattern.search(
-                    text
-                ), f"Potential AWS Access Key found in {file_path}"
-                assert not private_key_pattern.search(
-                    text
-                ), f"Private key header found in {file_path}"
+                assert not secret_key_pattern.search(text), (
+                    f"Potential AWS Access Key found in {file_path}"
+                )
+                assert not private_key_pattern.search(text), (
+                    f"Private key header found in {file_path}"
+                )
 
 
 def test_backup_and_restore_behavior_with_fake_shims(tmp_path):
@@ -364,7 +368,9 @@ def test_backup_and_restore_behavior_with_fake_shims(tmp_path):
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"backup-to-s3 failed: {result.stderr}\n{result.stdout}"
+    assert result.returncode == 0, (
+        f"backup-to-s3 failed: {result.stderr}\n{result.stdout}"
+    )
     assert "SUCCESS: Backup verified and archived" in result.stdout
 
     # 2. Test restore-from-s3.sh success
@@ -376,7 +382,9 @@ def test_backup_and_restore_behavior_with_fake_shims(tmp_path):
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"restore-from-s3 failed: {result.stderr}\n{result.stdout}"
+    assert result.returncode == 0, (
+        f"restore-from-s3 failed: {result.stderr}\n{result.stdout}"
+    )
     assert "SUCCESS: Database restored successfully" in result.stdout
 
     # 3. Test restore-from-s3.sh with corrupted dump (checksum mismatch)

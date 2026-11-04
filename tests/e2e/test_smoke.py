@@ -15,9 +15,9 @@ BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:5000").rstrip("/")
 def _register(page, name, email, password):
     page.goto(f"{BASE_URL}/")
     page.get_by_role("button", name="Create account").click()
-    page.get_by_label("Name").fill(name)
-    page.get_by_label("Email").fill(email)
-    page.get_by_label("Password").fill(password)
+    page.locator("#auth-form").get_by_label("Name").fill(name)
+    page.locator("#auth-form").get_by_label("Email").fill(email)
+    page.locator("#auth-form").get_by_label("Password").fill(password)
     page.get_by_role("button", name="Create account", exact=True).last.click()
     expect(page.get_by_role("heading", name=f"Welcome, {name}")).to_be_visible(
         timeout=15000
@@ -44,8 +44,8 @@ def test_register_search_add_friend_and_find_named_path():
             page.get_by_role("button", name="Sign out").click()
 
             page.goto(f"{BASE_URL}/")
-            page.get_by_label("Email").fill(email_a)
-            page.get_by_label("Password").fill(password)
+            page.locator("#auth-form").get_by_label("Email").fill(email_a)
+            page.locator("#auth-form").get_by_label("Password").fill(password)
             page.get_by_role("button", name="Sign in", exact=True).last.click()
             expect(
                 page.get_by_role("heading", name=f"Welcome, {hostile_name}")

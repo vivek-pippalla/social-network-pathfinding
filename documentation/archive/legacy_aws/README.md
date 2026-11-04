@@ -414,8 +414,8 @@ GITHUB_REPO="your-github-username/social-network-pathfinding"
 aws iam create-open-id-connect-provider \
     --url "https://token.actions.githubusercontent.com" \
     --client-id-list "sts.amazonaws.com" \
-    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1" \
-    "1c5824a9fdac1a70b100777a8468f2135c5c6c66" 2>/dev/null || echo "OIDC provider exists."
+    --thumbprint-list "<GITHUB_OIDC_THUMBPRINT_1>" \
+    "<GITHUB_OIDC_THUMBPRINT_2>" 2>/dev/null || echo "OIDC provider exists."
 
 # 2. Render Trust Policy
 sed -e "s|\${AWS_ACCOUNT_ID}|$ACCOUNT_ID|g" \

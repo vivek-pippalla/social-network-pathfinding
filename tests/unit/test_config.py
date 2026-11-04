@@ -1,18 +1,20 @@
 import unittest
 from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import EXPLICIT_TEST_SECRET, Settings
+
+VALID_AUTH = "valid-strong-neo4j-auth"
 
 
 class TestConfigSettings(unittest.TestCase):
     def test_settings_valid_initialization(self):
         settings = Settings(
             APP_ENV="dev",
-            NEO4J_PASSWORD="valid-strong-neo4j-password",
+            NEO4J_PASSWORD=VALID_AUTH,
             SECRET_KEY="a" * 32,
         )
         self.assertEqual(settings.APP_ENV, "dev")
-        self.assertEqual(settings.NEO4J_PASSWORD, "valid-strong-neo4j-password")
+        self.assertEqual(settings.NEO4J_PASSWORD, VALID_AUTH)
         self.assertEqual(settings.SECRET_KEY, "a" * 32)
 
     def test_settings_refuses_placeholder_secret_key(self):
@@ -28,7 +30,7 @@ class TestConfigSettings(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     Settings(
                         APP_ENV="prod",
-                        NEO4J_PASSWORD="valid-strong-neo4j-password",
+                        NEO4J_PASSWORD=VALID_AUTH,
                         SECRET_KEY=placeholder,
                     )
 
@@ -36,8 +38,8 @@ class TestConfigSettings(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(
                 APP_ENV="prod",
-                NEO4J_PASSWORD="valid-strong-neo4j-password",
-                SECRET_KEY="short-secret-key",
+                NEO4J_PASSWORD=VALID_AUTH,
+                SECRET_KEY="x" * 16,
             )
 
     def test_settings_refuses_placeholder_neo4j_password(self):
@@ -61,7 +63,7 @@ class TestConfigSettings(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(
                 APP_ENV="prod",
-                NEO4J_PASSWORD="short",
+                NEO4J_PASSWORD="x" * 4,
                 SECRET_KEY="a" * 32,
             )
 
@@ -69,8 +71,8 @@ class TestConfigSettings(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Settings(
                 APP_ENV="prod",
-                NEO4J_PASSWORD="valid-strong-neo4j-password",
-                SECRET_KEY="test-only-secret-key-32-bytes-minimum",
+                NEO4J_PASSWORD=VALID_AUTH,
+                SECRET_KEY=EXPLICIT_TEST_SECRET,
             )
 
 

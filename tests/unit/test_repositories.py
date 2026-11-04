@@ -7,7 +7,13 @@ from app.repositories import account_repo, graph_repo, ingestion_repo, user_repo
 
 
 class FakeCounters:
-    def __init__(self, nodes_created=0, nodes_deleted=0, relationships_created=0, relationships_deleted=0):
+    def __init__(
+        self,
+        nodes_created=0,
+        nodes_deleted=0,
+        relationships_created=0,
+        relationships_deleted=0,
+    ):
         self.nodes_created = nodes_created
         self.nodes_deleted = nodes_deleted
         self.relationships_created = relationships_created
@@ -84,13 +90,20 @@ class TestRepositoriesUnit(unittest.TestCase):
         not_found = user_repo.get_user_by_id(FakeDriver(empty_tx), "u1")
         self.assertIsNone(not_found)
 
-        own_profile = {"id": "u1", "name": "Alice", "source": "app", "email": "a@example.com"}
+        own_profile = {
+            "id": "u1",
+            "name": "Alice",
+            "source": "app",
+            "email": "a@example.com",
+        }
         profile_tx = FakeTx(lambda q, **p: FakeResult(own_profile))
         found_profile = user_repo.get_own_profile(FakeDriver(profile_tx), "u1")
         self.assertEqual(found_profile, own_profile)
 
     def test_user_repo_exists_update_and_search(self):
-        tx = FakeTx(lambda q, **p: FakeResult({"id": "u1", "name": "Bob", "source": "snap"}))
+        tx = FakeTx(
+            lambda q, **p: FakeResult({"id": "u1", "name": "Bob", "source": "snap"})
+        )
         driver = FakeDriver(tx)
 
         self.assertTrue(user_repo.user_exists(driver, "u1"))
@@ -102,22 +115,30 @@ class TestRepositoriesUnit(unittest.TestCase):
 
         search_records = [{"id": "u1", "name": "Alice", "source": "snap"}]
         search_tx = FakeTx(lambda q, **p: FakeResult(search_records))
-        results = user_repo.search_users(FakeDriver(search_tx), "ali", offset=0, limit=10)
+        results = user_repo.search_users(
+            FakeDriver(search_tx), "ali", offset=0, limit=10
+        )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["id"], "u1")
 
     def test_account_repo_create_and_lookups(self):
-        account_record = {"id": "u1", "name": "Alice", "source": "app", "email": "alice@example.com"}
+        account_record = {
+            "id": "u1",
+            "name": "Alice",
+            "source": "app",
+            "email": "alice@example.com",
+        }
         tx = FakeTx(lambda q, **p: FakeResult(account_record))
         driver = FakeDriver(tx)
 
+        dummy_hash = "hash-value"
         created = account_repo.create_account_and_user(
             driver,
             user_id="u1",
             name="Alice",
             email="alice@example.com",
             email_normalized="alice@example.com",
-            password_hash="hash-value",
+            password_hash=dummy_hash,
         )
         self.assertEqual(created["email"], "alice@example.com")
 
@@ -133,7 +154,9 @@ class TestRepositoriesUnit(unittest.TestCase):
         self.assertEqual(len(users_map), 2)
         self.assertIn("u1", users_map)
 
-        path_records = {"path": [{"id": "u1", "name": "Alice"}, {"id": "u2", "name": "Bob"}]}
+        path_records = {
+            "path": [{"id": "u1", "name": "Alice"}, {"id": "u2", "name": "Bob"}]
+        }
         path_tx = FakeTx(lambda q, **p: FakeResult(path_records))
         path = graph_repo.find_bounded_shortest_path(FakeDriver(path_tx), "u1", "u2", 5)
         self.assertEqual(len(path), 2)
@@ -152,7 +175,9 @@ class TestRepositoriesUnit(unittest.TestCase):
     def test_graph_repo_friendship_mutations(self):
         counters = FakeCounters(relationships_created=1, relationships_deleted=1)
         summary = FakeSummary(counters)
-        tx = FakeTx(lambda q, **p: FakeResult({"low_id": "u1", "high_id": "u2"}, summary))
+        tx = FakeTx(
+            lambda q, **p: FakeResult({"low_id": "u1", "high_id": "u2"}, summary)
+        )
         driver = FakeDriver(tx)
 
         exists, changed = graph_repo.add_friendship(driver, "u2", "u1")
@@ -164,7 +189,9 @@ class TestRepositoriesUnit(unittest.TestCase):
         self.assertTrue(changed)
 
     def test_ingestion_repo_operations(self):
-        counters = FakeCounters(nodes_created=5, nodes_deleted=10, relationships_deleted=20)
+        counters = FakeCounters(
+            nodes_created=5, nodes_deleted=10, relationships_deleted=20
+        )
         summary = FakeSummary(counters)
         tx = FakeTx(lambda q, **p: FakeResult(None, summary))
         driver = FakeDriver(tx)
