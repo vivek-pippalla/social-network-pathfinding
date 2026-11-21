@@ -1,17 +1,16 @@
-# AWS Resources Inventory & Lifecycle Tracking
+# AWS Resources Inventory & Lifecycle Notes
 
-This historical inventory is not authorization to delete resources. Preserve the existing `graph-project-ec2-role`, `/pathfinding-demo` log group, `graph-project-backups-unique-number` bucket, and all stored backups unless separately approved.
+This is a preservation-oriented inventory for the existing demonstration deployment. The EC2 instance is stopped, not terminated. Do not treat this list as authorization to modify or delete resources.
 
-This inventory tracks all AWS resources utilized during the Phase 15 single-instance demonstration deployment.
+| Resource | Known details | Current handling |
+|---|---|---|
+| EC2 instance | Ubuntu 24.04, `m7i-flex.large`, `ap-southeast-2` | Stopped; not terminated. Start only through the existing AWS account workflow. |
+| EC2 public address | Previously `3.25.91.158`, used with sslip.io | May change after stop/start. Retrieve the current address from the EC2 console before reconnecting. |
+| EC2 storage / Compose volumes | Holds persistent application and monitoring data | Preserve. Exact size, type and delete-on-termination setting are not confirmed here. |
+| Security group | HTTP and HTTPS; restricted SSH | Preserve current rules. Exact source CIDRs are not recorded in this document. |
+| IAM instance role | `graph-project-ec2-role` | Preserve; do not replace its policies based on template files. |
+| S3 backup bucket | `graph-project-backups-unique-number` in `ap-southeast-2` | Preserve bucket and every object. Backup schedule, retention and restore success are not established here. |
+| CloudWatch Logs group | `/pathfinding-demo` in `ap-southeast-2` | Preserve. Retention period is not confirmed here. |
+| Prometheus / Grafana | Compose `monitoring` profile; loopback-bound ports | Persistent data is on Compose volumes. Use SSH tunnels; do not expose publicly. |
 
-| Resource | Name / Tag | Created In | Billable Mode | Action at Cleanup |
-|---|---|---|---|---|
-| **EC2 Instance** | `pathfinding-demo`<br/>`Project=pathfinding-demo` | 15.4 Step 1 | Hourly compute while running; public IPv4 (~$0.005/hr) | Terminate (stops compute & releases IPv4) |
-| **EBS Root Volume** | 20 GiB gp3<br/>`Project=pathfinding-demo` | 15.4 Step 1 | **Per GB-month while running AND while stopped** | Automatically deleted on instance termination (*Delete on termination: true*); verify volume deletion |
-| **Security Group** | `pathfinding-demo-sg`<br/>`Project=pathfinding-demo` | 15.3 P9 | Free | Delete after instance termination |
-| **EC2 Key Pair** | `<KEY_PAIR_NAME>` | 15.3 P7 | Free | Delete key pair; delete local `.pem` file |
-| **IAM Instance Role & Profile** | `graph-project-ec2-role` | Existing environment | Free | Preserve existing role and instance profile |
-| **Amazon S3 Bucket** | `graph-project-backups-unique-number`<br/>`ap-southeast-2` | Existing environment | Storage and requests | Preserve bucket and all objects; do not empty or delete |
-| **CloudWatch Log Group** | `/pathfinding-demo`<br/>(7-day retention) | 15.3 P5 | Ingestion beyond allowance; 7-day retention | Delete log group |
-| **AWS Budget** | Monthly cost budget ($10 ceiling) | 15.2 Step 4 | Free (within first 2 action budgets) | Retain as ongoing account safety guardrail or delete |
-| **IAM OIDC Provider & Role (Optional)** | `token.actions.githubusercontent.com` | 15.9 | Free | Delete if GitHub Actions packaging workflow was configured |
+Stopping EC2 avoids instance compute while stopped, but attached EBS and retained AWS services can continue to incur charges. Review the AWS billing console for current costs. Do not terminate the instance or remove volumes as a cost-saving shortcut when preserving this deployment's data.

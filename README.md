@@ -39,7 +39,7 @@ The table describes implemented code and configuration. Live-service and browser
 | **Dataset Ingestion** | **SNAP Pipeline** | Implements SHA-256 verification, parser validation (including duplicate and self-loop rejection), and additive batch loading. Live Neo4j load and idempotency checks remain unverified. |
 | **Security & Privacy** | **Boundary Controls** | Compose keeps database ports off the public proxy; the image uses a non-root user (`10001:10001`). The CSP allows inline styles for the vendored graph library. |
 | **Observability** | **Prometheus & Grafana** | Internal Prometheus endpoint (`/metrics`) and pre-configured Grafana dashboard (Compose `monitoring` profile). |
-| **Deployment** | **Local Docker Stack** | Hardened multi-stage Dockerfile, loopback development override, prod-like Caddy edge stack, and automated rollback scripts. |
+| **Deployment** | **Docker Compose** | Hardened local stack plus a verified single-host AWS deployment documented in [`deploy/aws/README.md`](deploy/aws/README.md). |
 
 ---
 
@@ -172,4 +172,4 @@ See [docs/TESTING.md](docs/TESTING.md) for testing methodology, property test de
 - **Graph Visibility:** All authenticated users can query paths, suggestions, and friend connections across the graph. Credentials and emails remain strictly private.
 - **Identity Scope:** No email verification, password reset workflows, or multi-factor authentication (MFA). Stolen tokens remain valid until their 30-minute TTL expires.
 - **Benchmarking Pre-requisite:** Path latency benchmarks (`benchmarks/bench_paths.py`) require a running, ingested stack and are reported with specific machine specifications rather than assumed static claims.
-- **Cloud Demonstration:** AWS deployment files in `deploy/aws/` are authored as a manual portfolio demonstration kit (Phase 15). The documented default target is local Docker Compose; no AWS deployment is claimed.
+- **AWS Demonstration Status:** The AWS deployment was verified over HTTPS at `https://3.25.91.158.sslip.io/` and returned healthy while running. Its EC2 instance is now stopped, not terminated, so the application is currently offline. A public IP may change after the instance is restarted. See [`deploy/aws/README.md`](deploy/aws/README.md) for the runbook and current status.

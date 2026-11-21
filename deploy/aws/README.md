@@ -1,106 +1,118 @@
 # AWS Demonstration Deployment Runbook
 
-This directory contains the deployment kit, IAM policies, Compose overlays, and operational scripts for deploying the Social Network Pathfinding project to a single Amazon EC2 instance for portfolio demonstration.
+This directory contains the deployment kit, IAM policies, Compose overlays, and operational scripts for the single-host AWS demonstration. The deployment was verified in `ap-southeast-2` on Ubuntu 24.04 / `m7i-flex.large`. The EC2 instance is currently **stopped, not terminated**; the application is offline. The previously verified HTTPS endpoint was `https://3.25.91.158.sslip.io/`, but the public IP can change after a stop/start.
 
 ---
 
 ## 1. Architecture Overview
 
 - **Host:** Single EC2 instance running **Ubuntu 24.04** (the configured environment uses `m7i-flex.large`, 8 GiB RAM).
-- **Network Ingress:** Default VPC; Security Group strictly restricts TCP port 22 (SSH) and TCP port 80 (HTTP) to your current public workstation IP (`<MY_PUBLIC_IP>/32`).
-- **Internal Micro-Segmentation:** Caddy handles edge HTTP traffic on port 80. The application API (5000), Neo4j (7474, 7687), and Redis (6379) are unexposed to the host network and internet.
-- **Durable State:** Neo4j graph data lives on a 20 GiB gp3 root EBS volume (*Delete on termination: true*). Periodic backup dumps are archived to Amazon S3.
-- **Logging & Monitoring:** Docker `awslogs` log driver streams container output to CloudWatch log group `/pathfinding-demo` with 7-day retention in non-blocking mode.
-- **Identity & Security:** IAM instance role (`graph-project-ec2-role`) with IMDSv2 required (hop limit 1). No AWS access keys exist on disk.
+- **Network Ingress:** EC2 security group allows HTTP and HTTPS and restricts SSH. Caddy terminates HTTPS. API, Neo4j and Redis are not published publicly.
+- **Durable State:** Compose named volumes on the EC2 host store Neo4j and monitoring data. An S3 bucket is configured for graph backups; this documentation does not assert an unverified backup schedule, retention period, or restore test.
+- **Logging & Monitoring:** `deploy/aws/docker-compose.aws.yml` configures Docker's `awslogs` driver for API, Caddy, Neo4j and Redis to `/pathfinding-demo` in `ap-southeast-2`. CloudWatch Agent was not installed. Prometheus and Grafana run under the Compose `monitoring` profile and bind to host loopback only.
+- **Identity & Security:** The EC2 instance used role `graph-project-ec2-role`. Do not put credentials or secret values in documentation.
 
----
+The running deployment returned `HTTP/2 200` and `{"status":"ok"}` from its health endpoint. CloudWatch Live Tail showed fresh application logs; Logs Insights queries ran successfully and visualizations were created for requests/minute, average API latency, status codes, most-used endpoints and pathfinding activity. Prometheus was healthy, with both configured scrape targets `UP`; Grafana reported database status `ok` and served the provisioned dashboard `Social Network API Observability`. These are historical verification results from when the instance was running.
 
-## 2. Preparation Checklist (Before Launching EC2)
+## 2. Resume the stopped instance
 
-1. **Billing Guardrail:** Create an AWS Budget with a **$10 monthly ceiling** and email notifications at 50% and 80% actual spend.
-2. **S3 Bucket:** Use `graph-project-backups-unique-number` in `ap-southeast-2`; keep Block Public Access enabled and default encryption on. Review lifecycle policy carefully before applying it to preserve existing backups.
-3. **CloudWatch Log Group:** Create `/pathfinding-demo` with **7 days retention**.
-4. **IAM Role:** Use the existing `graph-project-ec2-role`. The example policy in `iam/ec2-instance-policy.json` is a template with account and bucket placeholders; it is not an instruction to replace the existing role policy.
-5. **Key Pair:** Create an EC2 key pair (e.g. `pathfinding-demo-key.pem`), saved locally with `chmod 400`.
-6. **Public IP:** Lookup your public IP: `curl -s https://checkip.amazonaws.com` and note `<MY_PUBLIC_IP>/32`.
-7. **Security Group:** Create `pathfinding-demo-sg` with inbound rules:
-   - TCP 22 from `<MY_PUBLIC_IP>/32`
-   - TCP 80 from `<MY_PUBLIC_IP>/32`
+Start the existing EC2 instance from the EC2 console in `ap-southeast-2` (or use the approved operator workflow for that account). Wait for EC2 status checks to pass, then retrieve its current public IPv4 address from the console. A stop/start can assign a different public IP; do not rely on the old address or old sslip.io URL. Reconnect with the current address:
 
----
-
-## 3. Deployment Procedure (Step-by-Step)
-
-### Step 1: EC2 Host
-- Supported OS: **Ubuntu 24.04** (64-bit x86)
-- Instance Type: `m7i-flex.large` (8 GiB)
-- Security Group: `pathfinding-demo-sg`
-- Root Volume: 20 GiB gp3 (*Delete on termination: true*)
-- Advanced: existing IAM Instance Profile `graph-project-ec2-role`; IMDSv2 Required; Hop limit: 1.
-
-### Step 2: Connect via SSH
 ```bash
-ssh -i /path/to/<KEY_PAIR_NAME>.pem ubuntu@<PUBLIC_IP>
-```
-
-### Step 3: Run Host Bootstrap
-```bash
-# Clone the repository onto the instance
-git clone https://github.com/<GITHUB_OWNER>/social-network-pathfinding.git
-cd social-network-pathfinding
-
-# Run bootstrap script (installs Docker, Compose v2, Git, jq, and swap)
-bash deploy/aws/scripts/bootstrap-ec2.sh
-
-# Re-login to apply docker group
-exit
-ssh -i /path/to/<KEY_PAIR_NAME>.pem ubuntu@<PUBLIC_IP>
+ssh -i /path/to/<KEY_PAIR_NAME>.pem ubuntu@<CURRENT_PUBLIC_IP>
 cd social-network-pathfinding
 ```
 
-### Step 4: Configure Environment
+If SSH is denied, confirm the current client IP is still allowed by the restricted SSH security-group rule. Refresh any DNS or sslip.io URL references for the new IP. Starting EC2 incurs compute charges; stopping it later stops compute charges, but attached EBS storage and retained AWS services may continue to incur charges.
+
+## 3. Start the production Compose stack
+
+Use the existing private `.env` on the instance. Do not replace it with the example if it contains the deployment's configured values. The example documents `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:deploy/aws/docker-compose.aws.yml` and `COMPOSE_PROFILES=edge`; Compose loads that file selection and the AWS `awslogs` overlay. Preserve all secret values privately.
+
 ```bash
-cp deploy/aws/env.aws.example .env
-chmod 600 .env
-
-# Generate independent secrets on the instance (never committed)
-SECRET_KEY=$(openssl rand -hex 32)
-NEO4J_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
-REDIS_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
-
-# Edit .env and supply the generated secrets; keep AWS_REGION and BACKUP_BUCKET aligned with the existing environment.
-nano .env
+docker compose config -q
+docker compose up -d --build
+docker compose ps
+curl -fsS https://<CURRENT_HOSTNAME_OR_IP>/health
+curl -fsS https://<CURRENT_HOSTNAME_OR_IP>/health/ready
+BASE_URL=https://<CURRENT_HOSTNAME> bash deploy/aws/scripts/verify.sh
 ```
 
-### Step 5: Start Stack
-```bash
-# Validate Compose configuration without printing resolved secrets
-docker compose config --no-interpolate | grep -nE 'ports:|logging:|driver:'
+For the IP-based HTTPS hostname, use the currently valid hostname/certificate setup from the instance; the former `3.25.91.158.sslip.io` address is historical. If readiness fails, inspect `docker compose logs --tail=100 api neo4j redis caddy`. Do not use `down -v`: it deletes named data volumes.
 
-# Deploy using automated deployment & healthcheck script
-bash deploy/local/deploy.sh
+### Enable Prometheus and Grafana
+
+The Compose file already publishes Prometheus on `127.0.0.1:9090` and Grafana on `127.0.0.1:3000`. Set non-placeholder `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in the existing `.env` only if they are not already configured, then start the monitoring profile:
+
+```bash
+docker compose --profile monitoring up -d
+docker compose ps prometheus grafana
 ```
 
-### Step 6: Ingest Dataset & Seed Demo Account
+The configured `edge` profile remains enabled by `.env`. Prometheus scrapes its own target and `api:5000/metrics`; the API `/metrics` endpoint is reached on the private Compose network.
+
+From a local terminal, open an SSH tunnel using the current EC2 address:
+
 ```bash
-docker compose run --rm api python -m app.cli ingest
-docker compose run --rm api python -m app.cli demo-user
+ssh -i /path/to/<KEY_PAIR_NAME>.pem -N \
+  -L 9090:127.0.0.1:9090 -L 3000:127.0.0.1:3000 \
+  ubuntu@<CURRENT_PUBLIC_IP>
 ```
 
-### Step 7: Run Verification Suite
-```bash
-# Run verification locally on the instance
-bash deploy/aws/scripts/verify.sh
+Then browse to `http://127.0.0.1:9090` (Prometheus) and `http://127.0.0.1:3000` (Grafana). These services are not publicly exposed. Grafana provisions `Social Network API Observability` with request rate, HTTP error rate, latency percentiles, path cache hit ratio and Neo4j query latency p95.
 
-# Run verification remotely from your laptop
-BASE_URL="http://<PUBLIC_IP>" bash deploy/aws/scripts/verify.sh
+## 4. CloudWatch logs and queries
+
+The AWS overlay assigns Docker's `awslogs` driver to API, Caddy, Neo4j and Redis, using region `AWS_REGION` and group `CW_LOG_GROUP` (default `/pathfinding-demo`). The driver uses non-blocking mode and a 4 MiB buffer. The instance role needs the log-stream write permissions defined for the existing log group. The CloudWatch Agent is not part of this setup.
+
+In the CloudWatch console, select `ap-southeast-2` and **Logs > Live Tail**, then select `/pathfinding-demo` to watch fresh container output. In **Logs Insights**, select the same group and a relevant time range. API request logs are JSON with `message`, `route`, `status`, and `duration_ms`; example queries:
+
+```text
+fields @timestamp, route, status, duration_ms
+| filter message = "http_request"
+| sort @timestamp desc
+| limit 100
 ```
+
+```text
+fields @timestamp, route, status, duration_ms
+| filter message = "http_request"
+| stats count(*) as requests by bin(1m)
+```
+
+```text
+fields route, status, duration_ms
+| filter message = "http_request"
+| stats avg(duration_ms) as avg_latency_ms by route
+| sort avg_latency_ms desc
+```
+
+```text
+fields status
+| filter message = "http_request"
+| stats count(*) as responses by status
+| sort status asc
+```
+
+```text
+fields @timestamp, route, status
+| filter message = "http_request" and route like /\/api\/v1\/path\//
+| stats count(*) as path_requests by bin(1m)
+```
+
+Use Logs Insights **Visualization** to chart the time-binned request query, average latency, grouped status codes, endpoint counts, and path-request activity. CloudWatch dashboard widgets created during the deployment included requests/minute, average latency, HTTP status codes, most-used endpoints and pathfinding activity. Queries execute over retained log events; no retention duration is asserted here.
 
 ---
 
-## 4. Operational Scripts
+## 5. Historical provisioning notes
 
-- **`scripts/bootstrap-ec2.sh`**: Installs Docker Engine, Compose v2, Git, jq, AWS CLI, and configures swap only on hosts with at most 2 GiB RAM. Supports Ubuntu 24.04.
+Older launch checklists and initial HTTP-only instructions are superseded by the current-state runbook above. Do not use them to recreate resources, replace the instance environment, or change security groups. For a new host, first reconcile the existing AWS account resources and the current `deploy/aws/env.aws.example`, Compose overlays, and bootstrap script; this guide is for resuming the retained deployment.
+
+---
+
+## 6. Operational scripts and data safety
+
+- **`deploy/aws/scripts/bootstrap-ec2.sh`**: Installs Docker Engine, Compose v2, Git, jq, AWS CLI, and configures swap only on hosts with at most 2 GiB RAM. Supports Ubuntu 24.04.
 - **`deploy/aws/scripts/backup-to-s3.sh`**: Uploads one identified dump and verifies downloaded S3 object bytes against SHA-256.
 - **`deploy/aws/scripts/restore-from-s3.sh <UTC_TIMESTAMP>`**: Downloads exactly one dump for the timestamp, verifies it, and requires explicit confirmation before replacing current graph data.
 - **`deploy/aws/scripts/verify.sh`**: Set `GRAPH_START_ID` and `GRAPH_END_ID` to known connected dataset nodes to check pathfinding and cache; otherwise these checks are reported as skipped. Rate-limit probing is opt-in with `--test-rate-limit`.
@@ -113,6 +125,14 @@ The supplied instance policy grants `CreateLogStream` and `PutLogEvents` for the
 
 ---
 
-## 5. Decommissioning & Cleanup
+To stop the application safely while keeping its data, stop the Compose services without removing volumes, then stop the EC2 instance from the console:
+
+```bash
+docker compose stop
+```
+
+Stopping EC2 reduces compute charges but does not remove the EBS volume, S3 backups, CloudWatch log group, or IAM role. Preserve the instance and named volumes if you expect to resume. Do not run `docker compose down -v`, remove volumes, or terminate EC2 as a cost-saving step. Backups are handled explicitly by `deploy/aws/scripts/backup-to-s3.sh`; a restore replaces the application graph database and requires confirmation. No backup schedule, retention period, or successful restore test is asserted here.
+
+## 7. Safe shutdown and cleanup
 
 Cleanup is a separate, explicitly approved operation. The existing EC2 instance, IAM role, CloudWatch log group, S3 bucket, and backup objects must be reviewed individually; do not apply the generic deletion checklist to shared or retained resources.
