@@ -64,19 +64,30 @@ volumes intact.
 
 ## Backup and restore
 
-`bash deploy/local/backup.sh [output-directory]` stops the API and Neo4j briefly,
-uses `neo4j-admin database dump neo4j --to-path=<directory>` against an offline
-database, copies the dump to the chosen host directory, then starts Neo4j and the
-API again. This is an offline Community Edition dump, so it includes the
+`bash deploy/local/backup.sh [output-directory]` checks that the API and Neo4j are
+healthy, stops them briefly, uses `neo4j-admin database dump neo4j --to-path=<directory>`
+against an offline database, and writes a dump, `.sha256` checksum, and version
+metadata sidecar before restarting Neo4j and the API. Its final `BACKUP_PATH=`
+line identifies the exact dump created. Set `DOCKER_SUDO=never`, `auto` (default),
+or `always` to select Docker permission handling; sudo is used non-interactively
+only and socket permissions are never changed. This is an offline Community Edition dump, so it includes the
 application's `neo4j` database but not Neo4j DBMS users or roles; keep the
 operator's `.env` separately.
 
-Restore is destructive to the current `neo4j` database and always prompts for the
-exact confirmation `RESTORE <dump-filename>`:
+Restore is destructive to the configured Compose application database `neo4j`;
+it is not an isolated/test restore. The dump's checksum and exact Neo4j version
+metadata are validated before stopping services. It requires the exact confirmation
+`RESTORE APPLICATION neo4j FROM <dump-filename>`:
 
 ```sh
 bash deploy/local/restore.sh ./backups/neo4j-<timestamp>.dump
 ```
+
+This restore command always targets the Compose application stack selected in the
+current directory. The script does not select an isolated/test database; testing
+a restore requires a separately configured Compose project and data volume. Dumps
+without the current `.sha256` and `.metadata.json` sidecars are rejected because
+their integrity and source Neo4j version cannot be established by the script.
 
 The restore script stages the selected dump under the required `neo4j.dump` name,
 stops the API and database, and runs

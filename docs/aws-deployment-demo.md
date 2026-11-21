@@ -6,11 +6,13 @@ This document records the design, cost envelope, verification procedures, and ob
 > **Status: PENDING (Phase 15 Part A Skeleton)**
 > All live AWS verification checks, screenshots, and billing records in this document are currently **PENDING**. Live deployment and manual evidence capture occur in Phase 15 Parts B and C after repository merge/tagging. No live AWS resources are active during Part A.
 
+> **Current environment note (operator-provided, not independently checked):** the EC2 instance is stopped; the configured deployment is Ubuntu 24.04 on `m7i-flex.large` in `ap-southeast-2`, using `graph-project-ec2-role`, bucket `graph-project-backups-unique-number`, and log group `/pathfinding-demo`. Preserve this existing infrastructure and its backup objects. This file's historical pending checklist is not authorization to start or delete resources; use `deploy/aws/README.md` as the operational source of truth.
+
 ---
 
 ## 1. Architectural Overview
 
-The AWS demonstration runs on a single Amazon EC2 instance (Amazon Linux 2023) within a default VPC in region `<REGION>` (e.g., `ap-south-1` or `us-east-1`). No database ports, cache ports, or backend ports are exposed to the public internet.
+The AWS demonstration is configured for a single Ubuntu 24.04 EC2 instance within a default VPC in region `ap-southeast-2`. No database ports, cache ports, or backend ports are exposed to the public internet.
 
 ```mermaid
 graph TD
@@ -18,17 +20,17 @@ graph TD
         ClientIP["Allowed IP (/32)<br/>Operator Machine"]
     end
 
-    subgraph AWS["AWS Cloud (Region: <REGION>)"]
+    subgraph AWS["AWS Cloud (Region: ap-southeast-2)"]
         subgraph SecurityGroup["Security Group (Strict /32 Inbound)"]
             Port22["TCP 22 (SSH Admin)"]
             Port80["TCP 80 (HTTP / Caddy)"]
         end
 
-        subgraph EC2["EC2 Instance (Amazon Linux 2023)"]
+        subgraph EC2["EC2 Instance (Ubuntu 24.04)"]
             IAMRole["EC2 Instance IAM Role<br/>(No Long-Lived Keys)"]
             Caddy["Caddy (Reverse Proxy)<br/>:80 Ingress"]
-            API["FastAPI API (Port 8000)<br/>Internal Only"]
-            Neo4j["Neo4j 5.26-community<br/>Bolt :7687 Internal Only"]
+            API["FastAPI API (Port 5000)<br/>Internal Only"]
+            Neo4j["Neo4j 5.12.0<br/>Bolt :7687 Internal Only"]
             Redis["Redis 7-alpine<br/>:6379 Internal Only"]
 
             Caddy -->|/api/*, /health*| API
@@ -38,7 +40,7 @@ graph TD
         end
 
         subgraph Managed["Managed AWS Services"]
-            S3["Amazon S3 Bucket<br/>s3://<BUCKET_NAME>/backups/<br/>s3://<BUCKET_NAME>/artifacts/"]
+            S3["Amazon S3 Bucket<br/>s3://graph-project-backups-unique-number/backups/<br/>s3://graph-project-backups-unique-number/artifacts/"]
             CloudWatch["CloudWatch Logs Group<br/>/pathfinding-demo<br/>(Retention: 7 days)"]
         end
 
@@ -67,11 +69,11 @@ graph TD
 
 | Parameter | Planned Demonstration Value | Actual Value | Notes |
 | :--- | :--- | :--- | :--- |
-| **AWS Region** | `<REGION>` | PENDING | e.g., `ap-south-1` or `us-east-1` |
-| **Instance Type** | `t3.small` / `t3.medium` (or free-tier eligible `t4g.small` / `t2.micro` with swap) | PENDING | Memory sizing requirement: ~1.2 GiB working set |
-| **AMI** | Amazon Linux 2023 Minimal (`al2023-ami-minimal-*`) | PENDING | Includes AWS CLI v2 and systemd |
+| **AWS Region** | `ap-southeast-2` | Operator-provided; not remotely verified | Sydney |
+| **Instance Type** | `m7i-flex.large` (8 GiB) | Operator-provided; instance stopped | Existing host; do not start as part of this repository task |
+| **AMI / OS** | Ubuntu 24.04 | Operator-provided; not remotely verified | Existing host; no EC2 connection made |
 | **Root Volume** | 20 GiB gp3 EBS (encrypted) | PENDING | Adequate for Docker images, dataset, and swapfile |
-| **Hourly Rate** | ~$0.0208 / hour (`t3.small` in `ap-south-1`) | PENDING | Plan for 12–16 total running hours (~$0.35 total) |
+| **Hourly Rate** | PENDING | PENDING | Verify from current AWS pricing/billing before any future operation; no cost estimate is asserted here |
 | **Budget Ceiling** | $10.00 / month with email alert at 50% ($5.00) | PENDING | Pre-launch cost guardrail |
 | **Target Commit** | `v1.0.0` release tag | PENDING | Tagged commit SHA |
 
@@ -92,7 +94,7 @@ graph TD
 | **S7** | Frontend loads | Browser `http://<PUBLIC_IP>/` | UI loads cleanly; only same-origin requests | PENDING | - | - |
 | **S8** | Neo4j connectivity | Cypher shell query for node count | Returns count of dataset users (4,039) | PENDING | - | - |
 | **S9** | Redis connectivity & auth | `redis-cli -a "$REDIS_PASSWORD" ping` | Authenticated returns `PONG`; unauthenticated returns `NOAUTH` | PENDING | - | - |
-| **S10** | Closed ports | From alternate network (e.g. mobile hotspot): probe 22, 80, 7474, 7687, 6379, 8000 | All ports timed out or refused | PENDING | - | - |
+| **S10** | Closed ports | From alternate network (e.g. mobile hotspot): probe 22, 80, 7474, 7687, 6379, 5000 | All ports timed out or refused | PENDING | - | - |
 | **S11** | Operational endpoints | `curl -s -o /dev/null -w '%{http_code}' http://<PUBLIC_IP>/metrics` and `/docs` | `/metrics` blocked (403/404); `/docs` 404 | PENDING | - | - |
 | **S12** | CloudWatch Logs | AWS Console: `/pathfinding-demo` log group | Log streams present per container with recent events | PENDING | - | - |
 | **S13** | Memory headroom | `free -m`, `docker stats --no-stream`, `sudo dmesg \| grep -i killed` | No OOM kills; swap usage stable | PENDING | - | - |
@@ -149,7 +151,7 @@ graph TD
 | **X1** | Security group inbound | AWS Console / CLI `describe-security-groups` | Only TCP 22 and 80 allowed, strictly restricted to operator `/32` | PENDING | - | - |
 | **X2** | IMDSv2 enforcement | `aws ec2 describe-instances --query '...MetadataOptions'` | `HttpTokens: required`, `HttpPutResponseHopLimit: 2` | PENDING | - | - |
 | **X3** | No stored credentials | `ls -la ~/.aws/`, `aws sts get-caller-identity` | No AWS credentials file; caller is the attached instance IAM role | PENDING | - | - |
-| **X4** | S3 least privilege | Attempt `aws s3 cp /etc/hostname s3://<BUCKET_NAME>/disallowed.txt` | Access Denied (role only permits `backups/` write and `artifacts/` read) | PENDING | - | - |
+| **X4** | S3 least privilege | Historical test procedure only; do not run against the retained bucket without separate approval. | Access Denied expected (role only permits `backups/` write and `artifacts/` read) | NOT RUN | - | - |
 | **X5** | CloudWatch log redaction | Search log group for passwords, JWT tokens, `Authorization` | Zero plaintext credentials or tokens in log streams | PENDING | - | - |
 | **X6** | Host permissions & status | `stat -c '%a' .env`, `git status` on instance | `.env` is `600`; `.env` is not tracked in Git; working tree clean | PENDING | - | - |
 
@@ -162,9 +164,9 @@ graph TD
 | **EC2 Instance** | Terminate instance | `aws ec2 describe-instances --filters Name=tag:Project,Values=social-network-pathfinding` (state: terminated) | PENDING | - |
 | **EBS Volumes** | Delete attached gp3 volume | `aws ec2 describe-volumes --filters Name=tag:Project,Values=social-network-pathfinding` (empty) | PENDING | - |
 | **Security Group** | Delete demo security group | `aws ec2 describe-security-groups --group-names pathfinding-demo-sg` (not found) | PENDING | - |
-| **S3 Bucket** | Empty and delete bucket | `aws s3 ls s3://<BUCKET_NAME>` (NoSuchBucket) | PENDING | - |
+| **S3 Bucket** | Preserve existing bucket and all backup objects | `graph-project-backups-unique-number` in `ap-southeast-2` | PRESERVE | - |
 | **CloudWatch Log Group** | Delete log group | `aws logs describe-log-groups --log-group-name-prefix /pathfinding-demo` (empty) | PENDING | - |
-| **IAM Role & Policies** | Detach and delete role/policies | `aws iam get-role --role-name PathfindingEC2InstanceRole` (NoSuchEntity) | PENDING | - |
+| **IAM Role & Policies** | Preserve existing `graph-project-ec2-role`; no deletion is authorized by this record | `graph-project-ec2-role` | PRESERVE | - |
 | **OIDC Provider / Role** | Delete OIDC role (if used) | `aws iam get-role --role-name PathfindingGitHubActionsRole` (NoSuchEntity) | PENDING | - |
 | **48-Hour Billing Audit** | Recheck AWS Billing Console | Cost Explorer shows zero running charges for demo resources | PENDING | - |
 
