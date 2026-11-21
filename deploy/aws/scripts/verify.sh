@@ -42,7 +42,7 @@ import base64, json, os, re, sys
 try:
     parts = os.environ["JWT_TOKEN"].split(".")
     if len(parts) != 3 or len(parts[1]) > 8192: raise ValueError
-    if not parts[1] or any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-" for c in parts[1]): raise ValueError
+    if not parts[1] or any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-" for c in parts[1]): raise ValueError  # pragma: allowlist secret
     payload = parts[1] + "=" * (-len(parts[1]) % 4)
     claims = json.loads(base64.b64decode(payload, altchars=b"-_", validate=True))
     if not isinstance(claims, dict): raise ValueError
