@@ -1,179 +1,30 @@
-# AWS Demonstration Deployment & Evidence Record
+# AWS Demonstration Deployment & Verification Record
 
-This document records the design, cost envelope, verification procedures, and observed results for the single-instance AWS demonstration deployment of **Social Network Pathfinding Engine** (`social-network-pathfinding`).
+This record captures the operator-provided deployment facts and verification results for the AWS demonstration. The runbook is maintained in [`deploy/aws/README.md`](../deploy/aws/README.md).
 
-> [!IMPORTANT]
-> **Status: PENDING (Phase 15 Part A Skeleton)**
-> All live AWS verification checks, screenshots, and billing records in this document are currently **PENDING**. Live deployment and manual evidence capture occur in Phase 15 Parts B and C after repository merge/tagging. No live AWS resources are active during Part A.
+## Current status
 
-> **Current environment note (operator-provided, not independently checked):** the EC2 instance is stopped; the configured deployment is Ubuntu 24.04 on `m7i-flex.large` in `ap-southeast-2`, using `graph-project-ec2-role`, bucket `graph-project-backups-unique-number`, and log group `/pathfinding-demo`. Preserve this existing infrastructure and its backup objects. This file's historical pending checklist is not authorization to start or delete resources; use `deploy/aws/README.md` as the operational source of truth.
+- The EC2 instance in `ap-southeast-2` is **stopped, not terminated**. The application is currently offline.
+- The deployment used Ubuntu 24.04, instance type `m7i-flex.large`, FastAPI, Neo4j, Redis, Caddy and Docker Compose.
+- The previously used HTTPS endpoint was `https://3.25.91.158.sslip.io/`. Its health endpoint returned `HTTP/2 200` and `{"status":"ok"}` while the instance was running. The address may change after restart; this endpoint must not be presented as currently available.
+- The deployment used EC2 role `graph-project-ec2-role`, S3 graph-backup bucket `graph-project-backups-unique-number`, CloudWatch Logs group `/pathfinding-demo`, and a security group with HTTP/HTTPS ingress and restricted SSH.
+- No credentials or secret environment values are recorded here.
 
----
+## Verified deployment and monitoring
 
-## 1. Architectural Overview
+| Area | Recorded result |
+|---|---|
+| HTTPS health | Returned HTTP/2 200 and `{"status":"ok"}` while running. |
+| Docker logging | `awslogs` overlay sent API, Caddy, Neo4j and Redis container logs to `/pathfinding-demo` in `ap-southeast-2`. CloudWatch Live Tail displayed fresh application logs. CloudWatch Agent was not installed. |
+| CloudWatch Logs Insights | Queries executed successfully. Visualizations created for API requests per minute, average API latency, HTTP status codes, most-used API endpoints and pathfinding activity. |
+| Prometheus | Started with the Compose monitoring profile, accessed through an SSH tunnel, health endpoint healthy; Prometheus self-monitoring and API scrape targets were both `UP`. API metrics were collected from `/metrics`. |
+| Grafana | Started with the monitoring profile and accessed through an SSH tunnel. Health endpoint reported database status `ok`; provisioned dashboard was `Social Network API Observability`. |
+| Grafana panels | Request rate, HTTP error rate, HTTP latency percentiles, path cache hit ratio and Neo4j query latency p95. |
 
-The AWS demonstration is configured for a single Ubuntu 24.04 EC2 instance within a default VPC in region `ap-southeast-2`. No database ports, cache ports, or backend ports are exposed to the public internet.
+Prometheus and Grafana were bound to host loopback by the Compose configuration and were not publicly exposed. Dashboard query definitions are in [`monitoring/grafana/dashboards/sample-dashboard.json`](../monitoring/grafana/dashboards/sample-dashboard.json).
 
-```mermaid
-graph TD
-    subgraph Client["Operator / Browser"]
-        ClientIP["Allowed IP (/32)<br/>Operator Machine"]
-    end
+## Not established by this record
 
-    subgraph AWS["AWS Cloud (Region: ap-southeast-2)"]
-        subgraph SecurityGroup["Security Group (Strict /32 Inbound)"]
-            Port22["TCP 22 (SSH Admin)"]
-            Port80["TCP 80 (HTTP / Caddy)"]
-        end
+The EC2 host was stopped after verification. No claim is made here that the service is currently reachable. The exact current public IP, EBS volume size/type and deletion behavior, CloudWatch retention period, S3 lifecycle/backup schedule, or a successful restore drill are not confirmed by the supplied deployment evidence. The existence of the backup bucket does not by itself establish that a current backup is available or restorable. Check the AWS console and the actual objects before relying on recovery.
 
-        subgraph EC2["EC2 Instance (Ubuntu 24.04)"]
-            IAMRole["EC2 Instance IAM Role<br/>(No Long-Lived Keys)"]
-            Caddy["Caddy (Reverse Proxy)<br/>:80 Ingress"]
-            API["FastAPI API (Port 5000)<br/>Internal Only"]
-            Neo4j["Neo4j 5.12.0<br/>Bolt :7687 Internal Only"]
-            Redis["Redis 7-alpine<br/>:6379 Internal Only"]
-
-            Caddy -->|/api/*, /health*| API
-            Caddy -->|/* (Static)| Caddy
-            API -->|Graph Queries| Neo4j
-            API -->|Path & Query Cache| Redis
-        end
-
-        subgraph Managed["Managed AWS Services"]
-            S3["Amazon S3 Bucket<br/>s3://graph-project-backups-unique-number/backups/<br/>s3://graph-project-backups-unique-number/artifacts/"]
-            CloudWatch["CloudWatch Logs Group<br/>/pathfinding-demo<br/>(Retention: 7 days)"]
-        end
-
-        IAMRole -.->|PutObject / GetObject| S3
-        EC2 -.->|awslogs driver (non-blocking)| CloudWatch
-    end
-
-    ClientIP -->|SSH Only| Port22
-    ClientIP -->|HTTP Only| Port80
-```
-
-### Key Architectural Decisions
-
-1. **Single-Instance Deployment:** Minimal demo footprint using Docker Compose with local volume mounts (`neo4j-data`, `redis-data`, `caddy-data`). Avoids high-cost managed services (RDS, ElastiCache, Neo4j Aura).
-2. **Reverse Proxy Edge:** Caddy handles reverse proxying on port 80, blocking operational endpoints (`/metrics`, `/docs`) from unauthorized access.
-3. **Internal-Only Databases:** Neo4j (7474, 7687) and Redis (6379) are bound strictly inside the Docker bridge network. No database ports are published or mapped to the host.
-4. **Least-Privilege Instance IAM Role:** Uses AWS STS temporary credentials via IMDSv2. No IAM access keys or credentials are stored on the instance disk or in `.env`.
-5. **Non-Blocking CloudWatch Logging:** Containers log via the `awslogs` driver in `mode: non-blocking` with a `max-buffer-size: 4m`, ensuring logging backpressure cannot impact API availability.
-6. **Encrypted S3 Backups with Expiration:** Neo4j offline backups are compressed, hashed with SHA-256, and stored in S3 under `backups/` with a 14-day lifecycle expiration rule.
-
----
-
-## 2. Decision Record & Cost Safeguards
-
-### Deployment Decision Record
-
-| Parameter | Planned Demonstration Value | Actual Value | Notes |
-| :--- | :--- | :--- | :--- |
-| **AWS Region** | `ap-southeast-2` | Operator-provided; not remotely verified | Sydney |
-| **Instance Type** | `m7i-flex.large` (8 GiB) | Operator-provided; instance stopped | Existing host; do not start as part of this repository task |
-| **AMI / OS** | Ubuntu 24.04 | Operator-provided; not remotely verified | Existing host; no EC2 connection made |
-| **Root Volume** | 20 GiB gp3 EBS (encrypted) | PENDING | Adequate for Docker images, dataset, and swapfile |
-| **Hourly Rate** | PENDING | PENDING | Verify from current AWS pricing/billing before any future operation; no cost estimate is asserted here |
-| **Budget Ceiling** | $10.00 / month with email alert at 50% ($5.00) | PENDING | Pre-launch cost guardrail |
-| **Target Commit** | `v1.0.0` release tag | PENDING | Tagged commit SHA |
-
----
-
-## 3. Verification Test Checklists
-
-### A. Smoke Test Checklist (S1–S13)
-
-| ID | Check | How | Expected | Result | Date | Evidence |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **S1** | Instance healthy | Console status checks; SSH works | 2/2 checks passed; SSH succeeds | PENDING | - | - |
-| **S2** | Tooling present | `docker compose version`, `aws sts get-caller-identity` | Tooling functional; caller identity is instance IAM role | PENDING | - | - |
-| **S3** | All services up | `docker compose ps` | `api`, `neo4j`, `redis`, `caddy` running/healthy; monitoring absent | PENDING | - | - |
-| **S4** | Liveness | `curl -fsS http://localhost/health` | HTTP 200 `{"status":"ok"}` | PENDING | - | - |
-| **S5** | Readiness | `curl -fsS http://localhost/health/ready` | HTTP 200, `database: ok`, `cache: ok` | PENDING | - | - |
-| **S6** | Public reachability | From laptop: `curl -fsS http://<PUBLIC_IP>/health` | HTTP 200 | PENDING | - | - |
-| **S7** | Frontend loads | Browser `http://<PUBLIC_IP>/` | UI loads cleanly; only same-origin requests | PENDING | - | - |
-| **S8** | Neo4j connectivity | Cypher shell query for node count | Returns count of dataset users (4,039) | PENDING | - | - |
-| **S9** | Redis connectivity & auth | `redis-cli -a "$REDIS_PASSWORD" ping` | Authenticated returns `PONG`; unauthenticated returns `NOAUTH` | PENDING | - | - |
-| **S10** | Closed ports | From alternate network (e.g. mobile hotspot): probe 22, 80, 7474, 7687, 6379, 5000 | All ports timed out or refused | PENDING | - | - |
-| **S11** | Operational endpoints | `curl -s -o /dev/null -w '%{http_code}' http://<PUBLIC_IP>/metrics` and `/docs` | `/metrics` blocked (403/404); `/docs` 404 | PENDING | - | - |
-| **S12** | CloudWatch Logs | AWS Console: `/pathfinding-demo` log group | Log streams present per container with recent events | PENDING | - | - |
-| **S13** | Memory headroom | `free -m`, `docker stats --no-stream`, `sudo dmesg \| grep -i killed` | No OOM kills; swap usage stable | PENDING | - | - |
-
----
-
-### B. Feature Verification Checklist (F1–F12)
-
-| ID | Feature | How | Expected | Result | Date | Evidence |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **F1** | Ingestion | `MATCH (u:User {source:'snap'}) RETURN count(u)`; re-run ingest | 4,039 nodes, 88,234 edges; rerun is idempotent | PENDING | - | - |
-| **F2** | Auth journey | Register, token, me endpoint; unauthenticated access | Token issued; me returns email; unauthenticated returns 401 envelope | PENDING | - | - |
-| **F3** | Public profile & search | `GET /api/v1/users/{id}`, `GET /api/v1/users/search?q=` | Returns `id`, `name`, `source` only; no email or password hash | PENDING | - | - |
-| **F4** | Friendship operations | Add, list, remove; idempotent add/remove; add self; add unknown | 201 then 200 `created:false`; self 400 `CANNOT_FRIEND_SELF`; unknown 404 | PENDING | - | - |
-| **F5** | Mutual friends | `GET /api/v1/users/{id}/mutual` vs direct Cypher calculation | API mutual friend list and count match Cypher ground truth | PENDING | - | - |
-| **F6** | Shortest path | 10 benchmark pairs; reversed pair; same user; unknown user | Same hop counts as local Phase 14 record; symmetric; same user 0 hops | PENDING | - | - |
-| **F7** | Friend suggestions | `GET /api/v1/suggestions/me` twice | Deterministic ordering; excludes self and existing friends | PENDING | - | - |
-| **F8** | Cache behaviour | Query same path twice; add bridging friendship; remove friendship | 1st `cached:false`, 2nd `cached:true`; invalidates after graph mutation | PENDING | - | - |
-| **F9** | Auth surface | `POST /api/v1/connections`, `POST /api/v1/users/` | Returns 404 / 405 (legacy unauthenticated routes removed) | PENDING | - | - |
-| **F10** | Rate limiting | 6 failing login attempts within 60s window | 6th attempt returns 429 with `Retry-After`; real client IP recognized | PENDING | - | - |
-| **F11** | Uniform error envelope | Malformed request, invalid ID | Uniform JSON error with `request_id`; correlation ID found in CloudWatch | PENDING | - | - |
-| **F12** | UI journey | Browser walkthrough: register, search, pathfind, inspect graph | Frontend renders without console errors or external CDN leaks | PENDING | - | - |
-
----
-
-### C. Persistence & Recovery Tests (P1–P6)
-
-| ID | Test | Procedure | Expected | Result | Date | Evidence |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **P1** | Container restart | `docker compose restart`, poll `/health/ready` | Services recover healthy; registered user can still log in | PENDING | - | - |
-| **P2** | Stack down and up | `docker compose down` (without `-v`), then `docker compose up -d` | Data volumes intact; node and edge counts unchanged | PENDING | - | - |
-| **P3** | Host reboot | `sudo reboot`, reconnect over SSH | Systemd restarts Docker; stack auto-starts with data intact | PENDING | - | - |
-| **P4** | Instance stop/start | Console: Stop, then Start | EBS volume reattached; services recover on new public IP | PENDING | - | - |
-| **P5** | S3 backup | `deploy/aws/scripts/backup-to-s3.sh` | Dump and `.sha256` uploaded under `backups/`; checksum verified | PENDING | - | - |
-| **P6** | S3 restore drill | Destroy volume with `docker compose down -v`, restore from S3 | Data restored cleanly; node/edge counts match pre-destruction counts | PENDING | - | - |
-
----
-
-### D. Failure Drills (D1–D4)
-
-| ID | Drill | Procedure | Expected | Result | Date | Evidence |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **D1** | Redis degraded mode | `docker compose stop redis` | Pathfinding falls back to Neo4j (200 OK, `cached:false`); login 503; `/health/ready` 200 degraded | PENDING | - | - |
-| **D2** | Neo4j outage | `docker compose stop neo4j` | Data endpoints return 503 `UNAVAILABLE`; `/health/ready` 503; recovers on start | PENDING | - | - |
-| **D3** | CloudWatch logging backpressure | Temporarily revoke `logs:PutLogEvents` permission | API remains responsive (non-blocking logging mode); logs buffer without crash | PENDING | - | - |
-| **D4** | Host interruption | Terminate or reboot during request loop | Stack recovers cleanly on boot without database corruption | PENDING | - | - |
-
----
-
-### E. Security Verification (X1–X6)
-
-| ID | Check | Procedure | Expected | Result | Date | Evidence |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **X1** | Security group inbound | AWS Console / CLI `describe-security-groups` | Only TCP 22 and 80 allowed, strictly restricted to operator `/32` | PENDING | - | - |
-| **X2** | IMDSv2 enforcement | `aws ec2 describe-instances --query '...MetadataOptions'` | `HttpTokens: required`, `HttpPutResponseHopLimit: 2` | PENDING | - | - |
-| **X3** | No stored credentials | `ls -la ~/.aws/`, `aws sts get-caller-identity` | No AWS credentials file; caller is the attached instance IAM role | PENDING | - | - |
-| **X4** | S3 least privilege | Historical test procedure only; do not run against the retained bucket without separate approval. | Access Denied expected (role only permits `backups/` write and `artifacts/` read) | NOT RUN | - | - |
-| **X5** | CloudWatch log redaction | Search log group for passwords, JWT tokens, `Authorization` | Zero plaintext credentials or tokens in log streams | PENDING | - | - |
-| **X6** | Host permissions & status | `stat -c '%a' .env`, `git status` on instance | `.env` is `600`; `.env` is not tracked in Git; working tree clean | PENDING | - | - |
-
----
-
-## 4. Teardown & Resource Cleanup Record
-
-| Resource | Action Required | Verification Command / Console Check | Status | Verification Date |
-| :--- | :--- | :--- | :--- | :--- |
-| **EC2 Instance** | Terminate instance | `aws ec2 describe-instances --filters Name=tag:Project,Values=social-network-pathfinding` (state: terminated) | PENDING | - |
-| **EBS Volumes** | Delete attached gp3 volume | `aws ec2 describe-volumes --filters Name=tag:Project,Values=social-network-pathfinding` (empty) | PENDING | - |
-| **Security Group** | Delete demo security group | `aws ec2 describe-security-groups --group-names pathfinding-demo-sg` (not found) | PENDING | - |
-| **S3 Bucket** | Preserve existing bucket and all backup objects | `graph-project-backups-unique-number` in `ap-southeast-2` | PRESERVE | - |
-| **CloudWatch Log Group** | Delete log group | `aws logs describe-log-groups --log-group-name-prefix /pathfinding-demo` (empty) | PENDING | - |
-| **IAM Role & Policies** | Preserve existing `graph-project-ec2-role`; no deletion is authorized by this record | `graph-project-ec2-role` | PRESERVE | - |
-| **OIDC Provider / Role** | Delete OIDC role (if used) | `aws iam get-role --role-name PathfindingGitHubActionsRole` (NoSuchEntity) | PENDING | - |
-| **48-Hour Billing Audit** | Recheck AWS Billing Console | Cost Explorer shows zero running charges for demo resources | PENDING | - |
-
----
-
-## 5. Known Limitations & Demonstration Trade-Offs
-
-1. **HTTP Ingress (No Domain / No ACME):** To keep the demonstration self-contained and cost-free, the deployment runs plain HTTP on port 80 restricted to the operator's `/32` IP address. Automatic HTTPS via ACME requires a registered public domain name and unrestricted port 80 ingress, which is intentionally avoided.
-2. **Single Host (No High Availability):** All services (FastAPI, Neo4j, Redis, Caddy) run on a single EC2 instance. This tests memory footprint and operational simplicity, but does not provide multi-AZ failover.
-3. **Ephemeral Demonstration Lifespan:** The deployment is designed to be provisioned, verified, recorded, and immediately torn down within 12–16 running hours to eliminate ongoing cloud costs.
+No automatic teardown is authorized by this document. Preserve the stopped instance, attached data volumes, IAM role, log group, bucket and all existing backup objects unless a separately reviewed operation explicitly authorizes a change.

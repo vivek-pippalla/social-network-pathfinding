@@ -1,44 +1,21 @@
-# Phase 15 AWS Cleanup & Decommissioning Checklist
+# AWS Shutdown & Preservation Checklist
 
-This is a historical generic checklist, not authorization to remove current infrastructure. The currently configured EC2 instance, `graph-project-ec2-role`, `/pathfinding-demo`, `graph-project-backups-unique-number`, and all existing S3 objects must be preserved. Do not execute any teardown step without separate explicit approval after reviewing the exact resource and data impact.
+The current EC2 instance is stopped, not terminated. This checklist covers routine cost-saving shutdown while preserving the deployment. It does not authorize deleting AWS resources or data.
 
----
+## Stop the application while keeping its data
 
-## 1. Save Gate Verification (Mandatory Before Any Deletion)
+If the instance is running and the application should be paused, connect to the host and run:
 
-Do not delete any cloud resources until all of the following conditions are satisfied:
+```bash
+docker compose stop
+```
 
-- [ ] All smoke and feature verification test results are recorded with dates in `docs/aws-deployment-demo.md`.
-- [ ] All 12 demonstration screenshots are saved in `docs/images/aws/` and personal IPs / account IDs are redacted.
-- [ ] Demonstration video link is recorded in `docs/aws-deployment-demo.md` (if video was recorded).
-- [ ] A final S3 backup dump has been downloaded locally if data retention is desired.
-- [ ] All local template files and deployment scripts are committed.
+Then stop the existing instance in the EC2 console in `ap-southeast-2`. Do not terminate it. Do not run `docker compose down -v`, remove Compose volumes, delete the EBS volume, empty the S3 bucket, or delete the CloudWatch log group. Stopping EC2 avoids compute charges while stopped, but attached storage and other retained AWS services may continue to incur charges.
 
----
+## Resume
 
-## 2. Resource Teardown Checklist
+Start the existing instance from the EC2 console, wait for status checks, then look up its current public IP. A stop/start can assign a new IP. See [`README.md`](README.md#2-resume-the-stopped-instance) for SSH, stack startup, health checks and monitoring access.
 
-Perform these steps in order using the AWS Console or AWS CLI. Verify each resource by its tag: `Project=pathfinding-demo`.
+## Before any separately authorized decommissioning
 
-| # | Resource | Action / Verification Command | Done |
-|---|---|---|---|
-| **1** | **EC2 Instance** | Terminate instance in the console, or:<br/>`aws ec2 terminate-instances --instance-ids <INSTANCE_ID> --region <REGION>`<br/>*Wait until status is `terminated`.* | [ ] |
-| **2** | **EBS Volumes** | Verify root volume is deleted:<br/>`aws ec2 describe-volumes --region <REGION> --filters Name=tag:Project,Values=pathfinding-demo`<br/>*Ensure no available volumes remain.* | [ ] |
-| **3** | **EBS Snapshots** | Verify no lingering snapshots:<br/>`aws ec2 describe-snapshots --owner-ids self --region <REGION>` | [ ] |
-| **4** | **Amazon S3** | Preserve the existing `graph-project-backups-unique-number` bucket and every backup object. Do not empty or delete it under this generic checklist. | [ ] |
-| **5** | **CloudWatch Logs** | Delete log group:<br/>`aws logs delete-log-group --log-group-name /pathfinding-demo --region <REGION>` | [ ] |
-| **6** | **Security Group** | Delete security group (after EC2 termination completes):<br/>`aws ec2 delete-security-group --group-id <SG_ID> --region <REGION>` | [ ] |
-| **7** | **Key Pair** | Delete EC2 key pair and remove local `.pem` file:<br/>`aws ec2 delete-key-pair --key-name <KEY_PAIR_NAME> --region <REGION>` | [ ] |
-| **8** | **Elastic IPs** | Confirm no Elastic IPs were allocated:<br/>`aws ec2 describe-addresses --region <REGION>` *(must be empty)* | [ ] |
-| **9** | **IAM Resources** | Delete instance profile, instance role, and inline policies. | [ ] |
-| **10** | **GitHub Environment** | Remove any repository variables in GitHub `aws-demo` environment if used. | [ ] |
-| **11** | **Other Regions** | Check EC2 dashboard to confirm no instances were created in other regions. | [ ] |
-
----
-
-## 3. Post-Cleanup Billing Verification
-
-1. Open **Billing and Cost Management** -> **Cost Explorer**.
-2. Confirm running EC2 instance hours drop to zero.
-3. Check Cost Explorer again **48 hours after cleanup** to account for cloud billing latency.
-4. Record final billing evidence in `docs/aws-deployment-demo.md`.
+Review each exact resource in the AWS console and identify its data and billing impact. Confirm independently that any desired backups exist and are usable; a bucket's existence does not prove a successful backup or restore. Preserve `graph-project-ec2-role`, `/pathfinding-demo`, `graph-project-backups-unique-number`, all S3 objects and any storage containing needed Compose volumes unless the user explicitly authorizes deletion of those specific resources. This checklist contains no termination or deletion commands.
