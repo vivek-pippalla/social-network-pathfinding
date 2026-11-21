@@ -45,7 +45,10 @@ case ${DOCKER_SUDO:-auto} in
         docker info >/dev/null 2>&1 || { echo 'ERROR: Docker is inaccessible with DOCKER_SUDO=never.' >&2; exit 2; }
         docker_cmd=(docker) ;;
     always)
-        command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1 || { echo 'ERROR: DOCKER_SUDO=always requires usable non-interactive sudo access to Docker.' >&2; exit 2; }
+        if ! command -v sudo >/dev/null 2>&1 || ! sudo -n docker info >/dev/null 2>&1; then
+            echo 'ERROR: DOCKER_SUDO=always requires usable non-interactive sudo access to Docker.' >&2
+            exit 2
+        fi
         docker_cmd=(sudo -n docker) ;;
     auto)
         if docker info >/dev/null 2>&1; then docker_cmd=(docker)
