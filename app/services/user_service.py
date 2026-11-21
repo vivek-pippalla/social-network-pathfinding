@@ -37,6 +37,4 @@ def search_users(
     normalized_query = query.strip()
     if not normalized_query:
         raise AppError("VALIDATION_ERROR", "Search query must not be empty.", 422)
-    return user_repo.search_users(
-        driver, normalized_query, offset=offset, limit=limit
-    )
+    return user_repo.search_users(driver, normalized_query, offset=offset, limit=limit)

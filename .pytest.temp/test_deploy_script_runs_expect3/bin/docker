@@ -1,0 +1,10 @@
+#!C:\Users\pc\miniconda3\envs\graph\python.exe
+import os, sys
+args = sys.argv[1:]
+with open(os.environ['DOCKER_LOG'], 'a', encoding='utf-8') as f: f.write(' '.join(args) + '\n')
+if args == ['compose', 'ps', '--all', '--quiet', 'api']:
+    print(os.environ.get('PREVIOUS_CONTAINER', ''))
+elif args[:2] == ['inspect', '--format']:
+    print(os.environ.get('PREVIOUS_IMAGE', ''))
+elif args[:2] == ['compose', 'up'] and '--force-recreate' in args and os.environ.get('ROLLBACK_START_FAILS') == '1':
+    sys.exit(17)

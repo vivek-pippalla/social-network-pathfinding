@@ -1,6 +1,6 @@
 # Phase 15 AWS Cleanup & Decommissioning Checklist
 
-Execute this checklist manually item by item immediately upon completing demonstration evidence capture. No resources should remain running.
+This is a historical generic checklist, not authorization to remove current infrastructure. The currently configured EC2 instance, `graph-project-ec2-role`, `/pathfinding-demo`, `graph-project-backups-unique-number`, and all existing S3 objects must be preserved. Do not execute any teardown step without separate explicit approval after reviewing the exact resource and data impact.
 
 ---
 
@@ -25,7 +25,7 @@ Perform these steps in order using the AWS Console or AWS CLI. Verify each resou
 | **1** | **EC2 Instance** | Terminate instance in the console, or:<br/>`aws ec2 terminate-instances --instance-ids <INSTANCE_ID> --region <REGION>`<br/>*Wait until status is `terminated`.* | [ ] |
 | **2** | **EBS Volumes** | Verify root volume is deleted:<br/>`aws ec2 describe-volumes --region <REGION> --filters Name=tag:Project,Values=pathfinding-demo`<br/>*Ensure no available volumes remain.* | [ ] |
 | **3** | **EBS Snapshots** | Verify no lingering snapshots:<br/>`aws ec2 describe-snapshots --owner-ids self --region <REGION>` | [ ] |
-| **4** | **Amazon S3** | Empty and delete bucket:<br/>`aws s3 rm s3://<BUCKET_NAME> --recursive`<br/>`aws s3 rb s3://<BUCKET_NAME>` | [ ] |
+| **4** | **Amazon S3** | Preserve the existing `graph-project-backups-unique-number` bucket and every backup object. Do not empty or delete it under this generic checklist. | [ ] |
 | **5** | **CloudWatch Logs** | Delete log group:<br/>`aws logs delete-log-group --log-group-name /pathfinding-demo --region <REGION>` | [ ] |
 | **6** | **Security Group** | Delete security group (after EC2 termination completes):<br/>`aws ec2 delete-security-group --group-id <SG_ID> --region <REGION>` | [ ] |
 | **7** | **Key Pair** | Delete EC2 key pair and remove local `.pem` file:<br/>`aws ec2 delete-key-pair --key-name <KEY_PAIR_NAME> --region <REGION>` | [ ] |
