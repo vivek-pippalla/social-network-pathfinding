@@ -1,0 +1,9 @@
+#!C:\Users\pc\miniconda3\envs\graph\python.exe
+import os, sys
+path = os.environ['CURL_LOG']
+with open(path, 'a+', encoding='utf-8') as f:
+    f.seek(0)
+    number = len(f.readlines())
+    f.write('health\n')
+plan = os.environ.get('CURL_PLAN', 'ok').split(',')
+sys.exit(0 if plan[min(number, len(plan) - 1)] == 'ok' else 22)

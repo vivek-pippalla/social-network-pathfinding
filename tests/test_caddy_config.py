@@ -148,9 +148,9 @@ def _compose_config(tmp_path, *, profile_args, files=None):
         env=environment,
         check=False,
     )
-    assert result.returncode == 0, (
-        "docker compose config failed; details were suppressed"
-    )
+    assert (
+        result.returncode == 0
+    ), "docker compose config failed; details were suppressed"
     return json.loads(result.stdout)
 
 

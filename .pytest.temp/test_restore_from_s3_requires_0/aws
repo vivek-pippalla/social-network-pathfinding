@@ -1,0 +1,12 @@
+#!C:\Users\pc\miniconda3\envs\graph\python.exe
+import hashlib, json, pathlib, sys
+dump_name='neo4j-20261104T120000Z-1.dump'
+args=sys.argv[1:]; args=args[2:] if args[:1]==['--region'] else args
+if args[:2]==['s3api','list-objects-v2']: print('backups/20261104T120000Z/'+dump_name); sys.exit(0)
+if args[:2]==['s3','cp']:
+ src,dst=args[2],args[3]; p=pathlib.Path(dst); p.parent.mkdir(parents=True,exist_ok=True); name=src.rsplit('/',1)[-1]
+ digest=hashlib.sha256(b'demo-dump').hexdigest()
+ if name==dump_name: p.write_bytes(b'demo-dump')
+ elif name==dump_name+'.sha256': p.write_text(digest+'  '+dump_name+'\n')
+ else: p.write_text(json.dumps({'database':'neo4j','dump':dump_name,'neo4j_version':'5.12.0','sha256':digest}))
+ sys.exit(0)

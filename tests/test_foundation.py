@@ -53,7 +53,9 @@ def test_settings_reject_missing_short_and_placeholder_secret(value, monkeypatch
         Settings(**arguments)
 
 
-def test_application_import_refuses_to_start_without_required_secret(monkeypatch, tmp_path):
+def test_application_import_refuses_to_start_without_required_secret(
+    monkeypatch, tmp_path
+):
     monkeypatch.delenv("SECRET_KEY", raising=False)
     environment = os.environ.copy()
     environment.pop("SECRET_KEY", None)

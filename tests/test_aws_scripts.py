@@ -533,7 +533,7 @@ def test_backup_and_restore_behavior_with_fake_shims(tmp_path, request):
     for mode, env_extra, expected in [
         ("none", {}, "Expected exactly one dump"),
         ("multiple", {}, "Expected exactly one dump"),
-        ("invalid", {}, "Expected exactly one dump"),
+        ("invalid", {}, "Dump name does not match the requested timestamp"),
         ("valid", {"AWS_MISSING_SIDECAR": "1"}, "Backup checksum download failed"),
     ]:
         bad = restore_env | {"AWS_LIST_MODE": mode} | env_extra
