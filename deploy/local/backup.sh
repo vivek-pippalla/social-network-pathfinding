@@ -57,6 +57,7 @@ finish() {
     if [[ $helper_created == true ]]; then docker_cli rm -f "$helper" >/dev/null 2>&1 || result=1; fi
     if [[ $services_stopped == true ]]; then
         if [[ $backup_temp_cleaned == false ]]; then
+            # shellcheck disable=SC2016  # $BACKUP_ID expands inside the container
             compose run --rm --no-deps -e "BACKUP_ID=$backup_id" --entrypoint sh neo4j \
                 -ec 'rm -rf -- "/backups/$BACKUP_ID"' || result=1
         fi
@@ -68,6 +69,7 @@ trap finish EXIT
 
 services_stopped=true
 compose stop api neo4j
+# shellcheck disable=SC2016  # $BACKUP_ID expands inside the container
 compose run --rm --no-deps -e "BACKUP_ID=$backup_id" --entrypoint sh neo4j \
     -ec 'mkdir -p "/backups/$BACKUP_ID"'
 helper_created=true
@@ -95,6 +97,7 @@ pathlib.Path(dump_path + ".metadata.json").write_text(
     json.dumps(metadata, sort_keys=True) + "\n", encoding="utf-8"
 )
 PY
+# shellcheck disable=SC2016  # $BACKUP_ID expands inside the container
 compose run --rm --no-deps -e "BACKUP_ID=$backup_id" --entrypoint sh neo4j \
     -ec 'rm -rf -- "/backups/$BACKUP_ID"'
 backup_temp_cleaned=true
