@@ -13,7 +13,7 @@ done
 checksum_file=${dump_file}.sha256
 metadata_file=${dump_file}.metadata.json
 [[ -s $checksum_file && -s $metadata_file ]] || { echo 'ERROR: Dump requires non-empty SHA-256 and version metadata sidecars.' >&2; exit 1; }
-expected_sha=$(awk 'NR == 1 {print $1}' "$checksum_file")
+expected_sha=$(awk "NR == 1 {print \$1}" "$checksum_file")
 actual_sha=$(sha256sum "$dump_file" | cut -d ' ' -f 1)
 [[ $expected_sha =~ ^[a-fA-F0-9]{64}$ && $actual_sha == "$expected_sha" ]] || { echo 'ERROR: Dump SHA-256 does not match its sidecar.' >&2; exit 1; }
 metadata_version=$(python3 - "$metadata_file" "$dump_name" "$actual_sha" <<'PY'
