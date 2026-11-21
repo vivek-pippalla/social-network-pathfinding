@@ -33,9 +33,9 @@ def test_frontend_http_methods_exist_in_openapi():
     assert ROUTES.keys() == methods.keys()
     for name, verbs in methods.items():
         path = ROUTES[name]
-        assert (
-            verbs <= OPENAPI["paths"][path].keys()
-        ), f"{name}: {verbs} missing on {path}"
+        assert verbs <= OPENAPI["paths"][path].keys(), (
+            f"{name}: {verbs} missing on {path}"
+        )
 
 
 def test_only_api_client_calls_fetch_and_dynamic_markup_is_not_used():

@@ -194,8 +194,9 @@ def test_request_bodies_over_the_configured_limit_use_error_envelope():
         headers={"Content-Type": "application/json", "X-Request-ID": "invalid id"},
     )
     assert malformed_id_response.status_code == 413
-    assert malformed_id_response.json()["error"]["request_id"] == (
-        malformed_id_response.headers["x-request-id"]
+    assert (
+        malformed_id_response.json()["error"]["request_id"]
+        == (malformed_id_response.headers["x-request-id"])
     )
 
 
